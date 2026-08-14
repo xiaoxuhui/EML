@@ -45,9 +45,26 @@
     return clampPosition({ ...view, x: view.x + deltaX, y: view.y + deltaY }, dimensions);
   }
 
+  function wheelDeltaToPixels(delta, deltaMode, pageSize) {
+    if (deltaMode === 1) return delta * 16;
+    if (deltaMode === 2) return delta * pageSize;
+    return delta;
+  }
+
   function reset() {
     return { scale: 1, x: 0, y: 0 };
   }
 
-  return { MIN_SCALE, MAX_SCALE, SCALE_STEP, PAN_STEP, normalizeScale, clampPosition, zoomAt, pan, reset };
+  return {
+    MIN_SCALE,
+    MAX_SCALE,
+    SCALE_STEP,
+    PAN_STEP,
+    normalizeScale,
+    clampPosition,
+    zoomAt,
+    pan,
+    wheelDeltaToPixels,
+    reset,
+  };
 });

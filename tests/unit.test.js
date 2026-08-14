@@ -39,6 +39,12 @@ test("计算树平移不会把内容完全移出可视区域", () => {
   );
 });
 
+test("计算树滚轮增量统一转换为像素", () => {
+  assert.equal(TreeViewport.wheelDeltaToPixels(5, 0, 300), 5);
+  assert.equal(TreeViewport.wheelDeltaToPixels(5, 1, 300), 80);
+  assert.equal(TreeViewport.wheelDeltaToPixels(2, 2, 300), 600);
+});
+
 test("U01 EML(1, 1) 化简为 e", () => {
   const result = evaluate(Expr.ONE, Expr.ONE);
   assert.equal(result.ok, true);

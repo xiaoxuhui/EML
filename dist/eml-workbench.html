@@ -1496,11 +1496,28 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return clampPosition({ ...view, x: view.x + deltaX, y: view.y + deltaY }, dimensions);
   }
 
+  function wheelDeltaToPixels(delta, deltaMode, pageSize) {
+    if (deltaMode === 1) return delta * 16;
+    if (deltaMode === 2) return delta * pageSize;
+    return delta;
+  }
+
   function reset() {
     return { scale: 1, x: 0, y: 0 };
   }
 
-  return { MIN_SCALE, MAX_SCALE, SCALE_STEP, PAN_STEP, normalizeScale, clampPosition, zoomAt, pan, reset };
+  return {
+    MIN_SCALE,
+    MAX_SCALE,
+    SCALE_STEP,
+    PAN_STEP,
+    normalizeScale,
+    clampPosition,
+    zoomAt,
+    pan,
+    wheelDeltaToPixels,
+    reset,
+  };
 });
 
 
@@ -1886,6 +1903,17 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   }
   elements.calculationTreeViewport.addEventListener("pointerup", stopTreePan);
   elements.calculationTreeViewport.addEventListener("pointercancel", stopTreePan);
+  elements.calculationTreeViewport.addEventListener("wheel", (event) => {
+    if (event.ctrlKey || event.metaKey) return;
+    const deltaY = TreeViewport.wheelDeltaToPixels(
+      event.deltaY,
+      event.deltaMode,
+      elements.calculationTreeViewport.clientHeight
+    );
+    const previousY = treeView.y;
+    panTree(0, -deltaY);
+    if (treeView.y !== previousY) event.preventDefault();
+  }, { passive: false });
   elements.calculationTreeViewport.addEventListener("keydown", (event) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const movements = {

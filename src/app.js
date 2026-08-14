@@ -379,6 +379,17 @@
   }
   elements.calculationTreeViewport.addEventListener("pointerup", stopTreePan);
   elements.calculationTreeViewport.addEventListener("pointercancel", stopTreePan);
+  elements.calculationTreeViewport.addEventListener("wheel", (event) => {
+    if (event.ctrlKey || event.metaKey) return;
+    const deltaY = TreeViewport.wheelDeltaToPixels(
+      event.deltaY,
+      event.deltaMode,
+      elements.calculationTreeViewport.clientHeight
+    );
+    const previousY = treeView.y;
+    panTree(0, -deltaY);
+    if (treeView.y !== previousY) event.preventDefault();
+  }, { passive: false });
   elements.calculationTreeViewport.addEventListener("keydown", (event) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const movements = {
