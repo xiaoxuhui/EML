@@ -543,7 +543,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const rules = [
     { id: "EXP_ZERO", label: "e^0 = 1" },
     { id: "EXP_ONE", label: "e^1 = e" },
-    { id: "EXP_LN_NONZERO", label: "e^(ln(a)) = a（a ≠ 0）" },
+    { id: "EXP_LN_FORMAL", label: "e^(ln(a)) = a（形式化反函数，a 不为明确的 0）" },
     { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
     { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
@@ -776,8 +776,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       if (isNegativeHalfIpi(expression.exponent)) {
         return { expression: neg(I), ruleId: "EULER_NEG_HALF_IDENTITY" };
       }
-      if (expression.exponent.type === TYPES.LN && isProvablyNonZero(expression.exponent.argument)) {
-        return { expression: expression.exponent.argument, ruleId: "EXP_LN_NONZERO" };
+      if (expression.exponent.type === TYPES.LN && !isInteger(expression.exponent.argument, 0)) {
+        return { expression: expression.exponent.argument, ruleId: "EXP_LN_FORMAL" };
       }
       if (
         expression.exponent.type === TYPES.SUB &&

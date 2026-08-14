@@ -179,7 +179,7 @@ test("回归：e^(ln(e - 1)) - e 化简为 -1", () => {
   );
   const result = Rules.simplify(expression);
   assert.equal(Expr.render(result.expression), "-1");
-  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
   assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_RIGHT"));
   assert.ok(result.steps.some((step) => step.ruleId === "NEG_INTEGER"));
 });
@@ -187,7 +187,7 @@ test("回归：e^(ln(e - 1)) - e 化简为 -1", () => {
 test("e^(ln(a)) 不对非正实数参数进行消去", () => {
   const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(Expr.integer(-1))));
   assert.equal(Expr.render(result.expression), "-1");
-  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"), false);
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"), false);
   assert.ok(result.steps.some((step) => step.ruleId === "LN_MINUS_ONE"));
   assert.ok(result.steps.some((step) => step.ruleId === "EULER_IDENTITY"));
 });
@@ -250,7 +250,7 @@ test("回归：e^(ln(ln(iπ))) - ln(2) 化简为 ln(iπ / 2)", () => {
   const x = Expr.ln(Expr.ln(Expr.mul(Expr.I, Expr.PI)));
   const result = evaluate(x, Expr.integer(2));
   assert.equal(result.displayText, "ln(iπ / 2)");
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_LN_NONZERO"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_QUOTIENT_POSITIVE_DENOMINATOR"));
 });
 
@@ -323,7 +323,7 @@ test("回归：e^(ln(i - ln(4))) 化简为 i - ln(4)", () => {
   const argument = Expr.sub(Expr.I, Expr.ln(Expr.integer(4)));
   const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(argument)));
   assert.equal(Expr.render(result.expression), "i - ln(4)");
-  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
 });
 
 test("非零判断识别虚部且不消去 ln(0)", () => {
@@ -333,7 +333,7 @@ test("非零判断识别虚部且不消去 ln(0)", () => {
   const zeroArgument = Expr.sub(Expr.ONE, Expr.ONE);
   const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(zeroArgument)));
   assert.equal(Expr.render(result.expression), "e^(ln(0))");
-  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"), false);
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"), false);
 });
 
 test("回归：e^(-ln(4)) 化简为 1 / 4", () => {
@@ -357,4 +357,20 @@ test("回归：e - ln(e^e / (e - i)) 化简为 ln(e - i)", () => {
   assert.equal(result.displayText, "ln(e - i)");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
+});
+
+test("回归：e^(ln(i - ln(iπ))) - i 化简为 -ln(iπ)", () => {
+  const argument = Expr.sub(Expr.I, Expr.ln(Expr.mul(Expr.I, Expr.PI)));
+  const expression = Expr.sub(Expr.pow(Expr.E, Expr.ln(argument)), Expr.I);
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "-ln(iπ)");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_RIGHT"));
+});
+
+test("形式化 e^ln 规则仍阻止明确的零参数", () => {
+  const expression = Expr.pow(Expr.E, Expr.ln(Expr.sub(Expr.ONE, Expr.ONE)));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "e^(ln(0))");
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"), false);
 });
