@@ -157,3 +157,17 @@ test("ln(e^a) 不对无法证明为实数的指数进行化简", () => {
   assert.equal(Expr.render(result.expression), "ln(e^(i))");
   assert.equal(result.steps.some((step) => step.ruleId === "LN_EXP_REAL"), false);
 });
+
+test("回归：嵌套实数对数指数继续化简", () => {
+  const exponent = Expr.sub(Expr.E, Expr.ln(Expr.sub(Expr.E, Expr.ONE)));
+  const result = evaluate(Expr.ONE, Expr.pow(Expr.E, exponent));
+  assert.equal(result.displayText, "ln(e - 1)");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_REAL"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
+});
+
+test("只有能证明为正数的对数参数才判定为实数", () => {
+  assert.equal(Rules.isProvablyPositive(Expr.sub(Expr.E, Expr.ONE)), true);
+  assert.equal(Rules.isProvablyReal(Expr.ln(Expr.sub(Expr.E, Expr.ONE))), true);
+  assert.equal(Rules.isProvablyReal(Expr.ln(Expr.integer(-1))), false);
+});

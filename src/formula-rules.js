@@ -26,6 +26,7 @@
     { id: "ADD_ZERO", label: "a + 0 = a" },
     { id: "SUB_ZERO", label: "a - 0 = a" },
     { id: "SUB_SELF", label: "a - a = 0" },
+    { id: "SUB_NESTED_LEFT", label: "a - (a - b) = b" },
     { id: "MUL_ONE", label: "a × 1 = a" },
     { id: "MUL_ZERO", label: "a × 0 = 0" },
   ];
@@ -52,9 +53,61 @@
         return isProvablyReal(expression.left) && isProvablyReal(expression.right);
       case TYPES.POW:
         return isConstant(expression.base, "e") && isProvablyReal(expression.exponent);
+      case TYPES.LN:
+        return isProvablyPositive(expression.argument);
       default:
         return false;
     }
+  }
+
+  function realBounds(expression) {
+    switch (expression.type) {
+      case TYPES.INTEGER:
+        return { lower: expression.value, upper: expression.value };
+      case TYPES.CONSTANT:
+        if (expression.name === "e") return { lower: 2, upper: 3 };
+        if (expression.name === "pi") return { lower: 3, upper: 4 };
+        return null;
+      case TYPES.NEG: {
+        const child = realBounds(expression.child);
+        return child ? { lower: -child.upper, upper: -child.lower } : null;
+      }
+      case TYPES.ADD:
+      case TYPES.SUB: {
+        const left = realBounds(expression.left);
+        const right = realBounds(expression.right);
+        if (!left || !right) return null;
+        return expression.type === TYPES.ADD
+          ? { lower: left.lower + right.lower, upper: left.upper + right.upper }
+          : { lower: left.lower - right.upper, upper: left.upper - right.lower };
+      }
+      case TYPES.MUL: {
+        const left = realBounds(expression.left);
+        const right = realBounds(expression.right);
+        if (!left || !right) return null;
+        const products = [
+          left.lower * right.lower,
+          left.lower * right.upper,
+          left.upper * right.lower,
+          left.upper * right.upper,
+        ];
+        return { lower: Math.min(...products), upper: Math.max(...products) };
+      }
+      default:
+        return null;
+    }
+  }
+
+  function isProvablyPositive(expression) {
+    if (
+      expression.type === TYPES.POW &&
+      isConstant(expression.base, "e") &&
+      isProvablyReal(expression.exponent)
+    ) {
+      return true;
+    }
+    const bounds = realBounds(expression);
+    return Boolean(bounds && bounds.lower > 0);
   }
 
   function rewriteNode(expression) {
@@ -89,6 +142,9 @@
     if (expression.type === TYPES.SUB) {
       if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "SUB_ZERO" };
       if (isSame(expression.left, expression.right)) return { expression: ZERO, ruleId: "SUB_SELF" };
+      if (expression.right.type === TYPES.SUB && isSame(expression.left, expression.right.left)) {
+        return { expression: expression.right.right, ruleId: "SUB_NESTED_LEFT" };
+      }
     }
 
     if (expression.type === TYPES.MUL) {
@@ -152,5 +208,5 @@
     return { expression: current, steps, limitReached: true };
   }
 
-  return { rules, simplify, isIpi, isProvablyReal };
+  return { rules, simplify, isIpi, isProvablyReal, isProvablyPositive };
 });
