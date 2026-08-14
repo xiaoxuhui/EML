@@ -144,3 +144,16 @@ test("无效导入不会通过校验", () => {
   assert.equal(Persistence.deserialize('{"schemaVersion":2}').ok, false);
   assert.equal(Persistence.deserialize("not json").error, "文件不是有效的 JSON");
 });
+
+test("回归：e - ln(e^(e)) 继续化简为 0", () => {
+  const result = evaluate(Expr.ONE, Expr.pow(Expr.E, Expr.E));
+  assert.equal(result.displayText, "0");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_REAL"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_SELF"));
+});
+
+test("ln(e^a) 不对无法证明为实数的指数进行化简", () => {
+  const result = Rules.simplify(Expr.ln(Expr.pow(Expr.E, Expr.I)));
+  assert.equal(Expr.render(result.expression), "ln(e^(i))");
+  assert.equal(result.steps.some((step) => step.ruleId === "LN_EXP_REAL"), false);
+});

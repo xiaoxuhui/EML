@@ -525,6 +525,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
     { id: "LN_ONE", label: "ln(1) = 0" },
     { id: "LN_E", label: "ln(e) = 1" },
+    { id: "LN_EXP_REAL", label: "ln(e^a) = a（a 为实数）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "NEG_INTEGER", label: "负整数化简" },
     { id: "ADD_ZERO", label: "a + 0 = a" },
@@ -542,6 +543,25 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     );
   }
 
+  function isProvablyReal(expression) {
+    switch (expression.type) {
+      case TYPES.INTEGER:
+        return true;
+      case TYPES.CONSTANT:
+        return expression.name === "e" || expression.name === "pi";
+      case TYPES.NEG:
+        return isProvablyReal(expression.child);
+      case TYPES.ADD:
+      case TYPES.SUB:
+      case TYPES.MUL:
+        return isProvablyReal(expression.left) && isProvablyReal(expression.right);
+      case TYPES.POW:
+        return isConstant(expression.base, "e") && isProvablyReal(expression.exponent);
+      default:
+        return false;
+    }
+  }
+
   function rewriteNode(expression) {
     if (expression.type === TYPES.POW && isConstant(expression.base, "e")) {
       if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
@@ -552,6 +572,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (expression.type === TYPES.LN) {
       if (isInteger(expression.argument, 1)) return { expression: ZERO, ruleId: "LN_ONE" };
       if (isConstant(expression.argument, "e")) return { expression: ONE, ruleId: "LN_E" };
+      if (
+        expression.argument.type === TYPES.POW &&
+        isConstant(expression.argument.base, "e") &&
+        isProvablyReal(expression.argument.exponent)
+      ) {
+        return { expression: expression.argument.exponent, ruleId: "LN_EXP_REAL" };
+      }
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
     }
 
@@ -630,7 +657,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return { expression: current, steps, limitReached: true };
   }
 
-  return { rules, simplify, isIpi };
+  return { rules, simplify, isIpi, isProvablyReal };
 });
 
 
