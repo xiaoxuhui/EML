@@ -24,6 +24,9 @@
     { id: "LN_EXP_REAL", label: "ln(e^a) = a（a 为实数）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "NEG_INTEGER", label: "负整数化简" },
+    { id: "INTEGER_ADD", label: "整数加法" },
+    { id: "INTEGER_SUB", label: "整数减法" },
+    { id: "INTEGER_MUL", label: "整数乘法" },
     { id: "ADD_ZERO", label: "a + 0 = a" },
     { id: "SUB_ZERO", label: "a - 0 = a" },
     { id: "SUB_SELF", label: "a - a = 0" },
@@ -140,11 +143,17 @@
     }
 
     if (expression.type === TYPES.ADD) {
+      if (expression.left.type === TYPES.INTEGER && expression.right.type === TYPES.INTEGER) {
+        return { expression: integer(expression.left.value + expression.right.value), ruleId: "INTEGER_ADD" };
+      }
       if (isInteger(expression.left, 0)) return { expression: expression.right, ruleId: "ADD_ZERO" };
       if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "ADD_ZERO" };
     }
 
     if (expression.type === TYPES.SUB) {
+      if (expression.left.type === TYPES.INTEGER && expression.right.type === TYPES.INTEGER) {
+        return { expression: integer(expression.left.value - expression.right.value), ruleId: "INTEGER_SUB" };
+      }
       if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "SUB_ZERO" };
       if (isSame(expression.left, expression.right)) return { expression: ZERO, ruleId: "SUB_SELF" };
       if (expression.right.type === TYPES.SUB && isSame(expression.left, expression.right.left)) {
@@ -156,6 +165,9 @@
     }
 
     if (expression.type === TYPES.MUL) {
+      if (expression.left.type === TYPES.INTEGER && expression.right.type === TYPES.INTEGER) {
+        return { expression: integer(expression.left.value * expression.right.value), ruleId: "INTEGER_MUL" };
+      }
       if (isInteger(expression.left, 0) || isInteger(expression.right, 0)) {
         return { expression: ZERO, ruleId: "MUL_ZERO" };
       }

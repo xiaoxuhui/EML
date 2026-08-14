@@ -191,3 +191,23 @@ test("e^(ln(a)) 不对非正实数参数进行消去", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "LN_MINUS_ONE"));
   assert.ok(result.steps.some((step) => step.ruleId === "EULER_IDENTITY"));
 });
+
+test("回归：1 - -1 化简为 2", () => {
+  const result = Rules.simplify(Expr.sub(Expr.ONE, Expr.integer(-1)));
+  assert.equal(Expr.render(result.expression), "2");
+  assert.ok(result.steps.some((step) => step.ruleId === "INTEGER_SUB"));
+});
+
+test("EML(0, e^(-1)) 完成对数和整数运算", () => {
+  const result = evaluate(Expr.ZERO, Expr.pow(Expr.E, Expr.integer(-1)));
+  assert.equal(result.displayText, "2");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_REAL"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "INTEGER_SUB"));
+});
+
+test("整数加法和乘法直接计算", () => {
+  const sum = Rules.simplify(Expr.add(Expr.integer(2), Expr.integer(-3)));
+  const product = Rules.simplify(Expr.mul(Expr.integer(-2), Expr.integer(3)));
+  assert.equal(Expr.render(sum.expression), "-1");
+  assert.equal(Expr.render(product.expression), "-6");
+});
