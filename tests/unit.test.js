@@ -374,3 +374,22 @@ test("形式化 e^ln 规则仍阻止明确的零参数", () => {
   assert.equal(Expr.render(result.expression), "e^(ln(0))");
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"), false);
 });
+
+test("回归：ln(-i) - ln(1 / (iπ)) 化简为 ln(-i) + ln(iπ)", () => {
+  const ipi = Expr.mul(Expr.I, Expr.PI);
+  const expression = Expr.sub(
+    Expr.ln(Expr.neg(Expr.I)),
+    Expr.ln(Expr.div(Expr.ONE, ipi))
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "ln(-i) + ln(iπ)");
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_RECIPROCAL"));
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_NEGATIVE"));
+});
+
+test("对数倒数规则不化简零分母", () => {
+  const expression = Expr.ln(Expr.div(Expr.ONE, Expr.ZERO));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "ln(1 / 0)");
+  assert.equal(result.steps.some((step) => step.ruleId === "LN_RECIPROCAL"), false);
+});

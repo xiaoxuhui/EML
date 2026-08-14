@@ -30,6 +30,7 @@
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
     { id: "LN_EXP_QUOTIENT", label: "ln(e^a / b) = a - ln(b)（b ≠ 0，形式化规则）" },
+    { id: "LN_RECIPROCAL", label: "ln(1 / a) = -ln(a)（a ≠ 0，形式化规则）" },
     { id: "NEG_INTEGER", label: "负整数化简" },
     { id: "NEG_DOUBLE", label: "-(-a) = a" },
     { id: "INTEGER_ADD", label: "整数加法" },
@@ -293,6 +294,16 @@
             Expr.ln(expression.argument.denominator)
           ),
           ruleId: "LN_EXP_QUOTIENT",
+        };
+      }
+      if (
+        expression.argument.type === TYPES.DIV &&
+        isInteger(expression.argument.numerator, 1) &&
+        isProvablyNonZero(expression.argument.denominator)
+      ) {
+        return {
+          expression: neg(Expr.ln(expression.argument.denominator)),
+          ruleId: "LN_RECIPROCAL",
         };
       }
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
