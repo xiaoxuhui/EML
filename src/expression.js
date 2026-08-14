@@ -88,7 +88,18 @@
         text = String(expression.value);
         break;
       case TYPES.NEG:
-        text = `-${render(expression.child, 2)}`;
+        if (expression.child.type === TYPES.NEG) {
+          text = `-(${render(expression.child)})`;
+        } else if (
+          expression.child.type === TYPES.MUL &&
+          [expression.child.left, expression.child.right].every((part) =>
+            [TYPES.CONSTANT, TYPES.INTEGER].includes(part.type)
+          )
+        ) {
+          text = `-${render(expression.child, 2)}`;
+        } else {
+          text = `-${render(expression.child, ownPrecedence)}`;
+        }
         break;
       case TYPES.ADD:
         text = `${render(expression.left, ownPrecedence)} + ${render(expression.right, ownPrecedence)}`;

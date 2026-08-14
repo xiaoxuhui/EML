@@ -63,6 +63,16 @@ test("U09 相同公式只保存一次", () => {
   assert.equal(second.state.values[first.resultValueId].derivationIds.length, 1);
 });
 
+test("重复添加同一公式会刷新计算步骤", () => {
+  const evaluation = evaluate(Expr.ONE, Expr.ONE);
+  const first = add(initial(), evaluation);
+  const refreshedSteps = [{ ruleId: "REFRESHED", before: "旧", after: "新" }];
+  const second = add(first.state, { ...evaluation, rewriteSteps: refreshedSteps });
+  const derivationId = second.state.values[first.resultValueId].derivationIds[0];
+  assert.equal(second.status, "duplicate-formula");
+  assert.deepEqual(second.state.derivations[derivationId].rewriteSteps, refreshedSteps);
+});
+
 test("U10 同一数值允许保存多条不同公式", () => {
   const state = initial();
   const firstEvaluation = evaluate(Expr.ONE, Expr.ONE);
@@ -392,4 +402,31 @@ test("对数倒数规则不化简零分母", () => {
   const result = Rules.simplify(expression);
   assert.equal(Expr.render(result.expression), "ln(1 / 0)");
   assert.equal(result.steps.some((step) => step.ruleId === "LN_RECIPROCAL"), false);
+});
+
+test("回归：e^(ln(-i) + ln(iπ)) 化简为 π", () => {
+  const exponent = Expr.add(
+    Expr.ln(Expr.neg(Expr.I)),
+    Expr.ln(Expr.mul(Expr.I, Expr.PI))
+  );
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "π");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_ADD_LN"));
+  assert.ok(result.steps.some((step) => step.ruleId === "MUL_NEG_FACTOR"));
+  assert.ok(result.steps.some((step) => step.ruleId === "I_TIMES_I_FACTOR"));
+  assert.ok(result.steps.some((step) => step.ruleId === "NEG_DOUBLE"));
+});
+
+test("对数和指数规则不消去明确的零参数", () => {
+  const exponent = Expr.add(Expr.ln(Expr.ZERO), Expr.ln(Expr.ONE));
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "e^(ln(0))");
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_ADD_LN"), false);
+});
+
+test("复数乘法计算树中的负号显示无歧义", () => {
+  const nestedProduct = Expr.neg(Expr.mul(Expr.I, Expr.mul(Expr.I, Expr.PI)));
+  const doubleNegative = Expr.neg(Expr.neg(Expr.PI));
+  assert.equal(Expr.render(nestedProduct), "-(i × iπ)");
+  assert.equal(Expr.render(doubleNegative), "-(-π)");
 });

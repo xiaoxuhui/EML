@@ -82,6 +82,15 @@
         createdAt: new Date().toISOString(),
       };
       next.values[resultValueId].derivationIds.push(derivationId);
+    } else {
+      Object.assign(existingDerivation, {
+        xValueId,
+        yValueId,
+        rawExpression: evaluation.rawExpression,
+        resultValueId,
+        directFormula: evaluation.directFormula,
+        rewriteSteps: evaluation.rewriteSteps,
+      });
     }
 
     next.selectedValueId = resultValueId;

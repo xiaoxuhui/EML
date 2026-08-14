@@ -20,6 +20,7 @@
     { id: "EXP_LN_FORMAL", label: "e^(ln(a)) = a（形式化反函数，a 不为明确的 0）" },
     { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
     { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
+    { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
     { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
     { id: "EULER_HALF_IDENTITY", label: "e^(iπ / 2) = i" },
@@ -50,6 +51,8 @@
     { id: "MUL_ZERO", label: "a × 0 = 0" },
     { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
     { id: "I_SQUARED", label: "i × i = -1" },
+    { id: "MUL_NEG_FACTOR", label: "(-a)b = -(ab)" },
+    { id: "I_TIMES_I_FACTOR", label: "i(ia) = -a" },
     { id: "DIV_ONE", label: "a / 1 = a" },
     { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
     { id: "INTEGER_DIV", label: "整除运算" },
@@ -274,6 +277,21 @@
           ruleId: "EXP_NEG_LN",
         };
       }
+      if (
+        expression.exponent.type === TYPES.ADD &&
+        expression.exponent.left.type === TYPES.LN &&
+        expression.exponent.right.type === TYPES.LN &&
+        !isInteger(expression.exponent.left.argument, 0) &&
+        !isInteger(expression.exponent.right.argument, 0)
+      ) {
+        return {
+          expression: mul(
+            expression.exponent.left.argument,
+            expression.exponent.right.argument
+          ),
+          ruleId: "EXP_ADD_LN",
+        };
+      }
     }
 
     if (expression.type === TYPES.LN) {
@@ -390,6 +408,28 @@
       }
       if (isConstant(expression.left, "i") && isConstant(expression.right, "i")) {
         return { expression: integer(-1), ruleId: "I_SQUARED" };
+      }
+      if (expression.left.type === TYPES.NEG) {
+        return { expression: neg(mul(expression.left.child, expression.right)), ruleId: "MUL_NEG_FACTOR" };
+      }
+      if (expression.right.type === TYPES.NEG) {
+        return { expression: neg(mul(expression.left, expression.right.child)), ruleId: "MUL_NEG_FACTOR" };
+      }
+      if (isConstant(expression.left, "i") && expression.right.type === TYPES.MUL) {
+        if (isConstant(expression.right.left, "i")) {
+          return { expression: neg(expression.right.right), ruleId: "I_TIMES_I_FACTOR" };
+        }
+        if (isConstant(expression.right.right, "i")) {
+          return { expression: neg(expression.right.left), ruleId: "I_TIMES_I_FACTOR" };
+        }
+      }
+      if (isConstant(expression.right, "i") && expression.left.type === TYPES.MUL) {
+        if (isConstant(expression.left.left, "i")) {
+          return { expression: neg(expression.left.right), ruleId: "I_TIMES_I_FACTOR" };
+        }
+        if (isConstant(expression.left.right, "i")) {
+          return { expression: neg(expression.left.left), ruleId: "I_TIMES_I_FACTOR" };
+        }
       }
       if (isInteger(expression.left, 1)) return { expression: expression.right, ruleId: "MUL_ONE" };
       if (isInteger(expression.right, 1)) return { expression: expression.left, ruleId: "MUL_ONE" };
