@@ -36,6 +36,9 @@
   const E = constant("e");
   const PI = constant("pi");
   const I = constant("i");
+  const MAX_EXPRESSION_DEPTH = 64;
+  const MAX_EXPRESSION_NODES = 2000;
+  const ALLOWED_CONSTANTS = new Set(["e", "pi", "i"]);
 
   function canonicalKey(expression) {
     switch (expression.type) {
@@ -231,13 +234,56 @@
     }
   }
 
-  function isValidExpression(expression) {
-    try {
-      canonicalKey(expression);
-      return true;
-    } catch {
-      return false;
+  function validateExpression(expression, options) {
+    const maxDepth = options?.maxDepth ?? MAX_EXPRESSION_DEPTH;
+    const maxNodes = options?.maxNodes ?? MAX_EXPRESSION_NODES;
+    const active = new Set();
+    let nodeCount = 0;
+
+    function visit(node, depth) {
+      if (!node || typeof node !== "object" || Array.isArray(node)) return false;
+      if (depth > maxDepth || nodeCount >= maxNodes || active.has(node)) return false;
+      nodeCount += 1;
+      active.add(node);
+      let valid = false;
+      switch (node.type) {
+        case TYPES.CONSTANT:
+          valid = ALLOWED_CONSTANTS.has(node.name);
+          break;
+        case TYPES.INTEGER:
+          valid = typeof node.value === "number" && Number.isSafeInteger(node.value);
+          break;
+        case TYPES.NEG:
+          valid = visit(node.child, depth + 1);
+          break;
+        case TYPES.ADD:
+        case TYPES.SUB:
+        case TYPES.MUL:
+          valid = visit(node.left, depth + 1) && visit(node.right, depth + 1);
+          break;
+        case TYPES.DIV:
+          valid = visit(node.numerator, depth + 1) && visit(node.denominator, depth + 1);
+          break;
+        case TYPES.POW:
+          valid = visit(node.base, depth + 1) && visit(node.exponent, depth + 1);
+          break;
+        case TYPES.LN:
+        case TYPES.SQRT:
+        case TYPES.SIN:
+          valid = visit(node.argument, depth + 1);
+          break;
+        default:
+          valid = false;
+      }
+      active.delete(node);
+      return valid;
     }
+
+    return { ok: visit(expression, 0), nodeCount };
+  }
+
+  function isValidExpression(expression, options) {
+    return validateExpression(expression, options).ok;
   }
 
   return {
@@ -258,6 +304,8 @@
     E,
     PI,
     I,
+    MAX_EXPRESSION_DEPTH,
+    MAX_EXPRESSION_NODES,
     canonicalKey,
     isSame,
     isInteger,
@@ -265,5 +313,6 @@
     render,
     approximate,
     isValidExpression,
+    validateExpression,
   };
 });

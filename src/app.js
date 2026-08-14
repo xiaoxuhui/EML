@@ -5,7 +5,7 @@
   const Evaluator = root.EMLEvaluator;
   const Store = root.EMLValueStore;
   const Persistence = root.EMLPersistence;
-  const TreeViewport = root.EMLTreeViewport;
+  const TreeController = root.EMLTreeController;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -30,56 +30,27 @@
     treeZoomIn: document.getElementById("treeZoomIn"),
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
+    treeExpandMore: document.getElementById("treeExpandMore"),
   };
 
   let state = restoreState();
   let preview = null;
   let pointerDrag = null;
   let suppressValueClick = false;
-  let treeView = { ...TreeViewport.reset(), valueId: null };
-  let treePan = null;
-
-  function treeDimensions() {
-    return {
-      viewportWidth: elements.calculationTreeViewport.clientWidth,
-      viewportHeight: elements.calculationTreeViewport.clientHeight,
-      contentWidth: elements.calculationTree.scrollWidth,
-      contentHeight: elements.calculationTree.scrollHeight,
-    };
-  }
-
-  function applyTreeView() {
-    const next = TreeViewport.clampPosition(treeView, treeDimensions());
-    treeView = { ...next, valueId: treeView.valueId };
-    elements.calculationTree.style.transform = `translate(${treeView.x}px, ${treeView.y}px) scale(${treeView.scale})`;
-    elements.treeZoomLevel.textContent = `${Math.round(treeView.scale * 100)}%`;
-    elements.treeZoomOut.disabled = treeView.scale <= TreeViewport.MIN_SCALE;
-    elements.treeZoomIn.disabled = treeView.scale >= TreeViewport.MAX_SCALE;
-  }
-
-  function zoomTree(delta) {
-    const viewport = elements.calculationTreeViewport;
-    treeView = {
-      ...TreeViewport.zoomAt(
-        treeView,
-        treeView.scale + delta,
-        { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2 },
-        treeDimensions()
-      ),
-      valueId: treeView.valueId,
-    };
-    applyTreeView();
-  }
-
-  function panTree(deltaX, deltaY) {
-    treeView = { ...TreeViewport.pan(treeView, deltaX, deltaY, treeDimensions()), valueId: treeView.valueId };
-    applyTreeView();
-  }
-
-  function resetTreeView() {
-    treeView = { ...TreeViewport.reset(), valueId: state.selectedValueId };
-    applyTreeView();
-  }
+  let treeDepth = Store.DEFAULT_TREE_DEPTH;
+  const treeController = TreeController.create({
+    viewport: elements.calculationTreeViewport,
+    canvas: elements.calculationTree,
+    zoomOut: elements.treeZoomOut,
+    zoomIn: elements.treeZoomIn,
+    zoomLevel: elements.treeZoomLevel,
+    resetButton: elements.treeResetView,
+    expandMore: elements.treeExpandMore,
+    onExpandMore: () => {
+      treeDepth = Math.min(Store.MAX_TREE_DEPTH, treeDepth + Store.DEFAULT_TREE_DEPTH);
+      renderDetails();
+    },
+  });
 
   function restoreState() {
     try {
@@ -125,7 +96,7 @@
   function renderCalculator() {
     renderSlot(elements.slotX, currentValue(state.inputXId), "x");
     renderSlot(elements.slotY, currentValue(state.inputYId), "y");
-    elements.result.classList.toggle("error", Boolean(preview && !preview.ok));
+    elements.result.classList.toggle("error", Boolean(preview && (!preview.ok || preview.limitReached)));
 
     if (!preview) {
       elements.result.textContent = "?";
@@ -137,6 +108,13 @@
     if (!preview.ok) {
       elements.result.textContent = "未定义";
       elements.directPreview.textContent = preview.error;
+      elements.add.disabled = true;
+      return;
+    }
+
+    if (preview.limitReached) {
+      elements.result.textContent = preview.displayText;
+      elements.directPreview.textContent = "化简达到安全上限，当前结果尚不能添加。";
       elements.add.disabled = true;
       return;
     }
@@ -242,6 +220,8 @@
 
     if (node.type === "cycle") {
       item.append("（检测到循环，已停止展开）");
+    } else if (node.type === "deferred") {
+      item.append(node.reason === "node-limit" ? "（已达到节点显示上限）" : "（还有更早的来源）");
     } else if (node.derivations && node.derivations.length) {
       node.derivations.forEach((derivation) => item.appendChild(renderDerivation(derivation)));
     }
@@ -276,14 +256,19 @@
   }
 
   function renderDetails() {
-    const details = Store.getDetails(state, state.selectedValueId);
-    if (treeView.valueId !== state.selectedValueId) {
-      treeView = { ...TreeViewport.reset(), valueId: state.selectedValueId };
+    const details = Store.getDetails(state, state.selectedValueId, {
+      maxDepth: treeDepth,
+      maxNodes: Store.MAX_TREE_NODES,
+    });
+    if (treeController.ensureValue(state.selectedValueId)) {
+      treeDepth = Store.DEFAULT_TREE_DEPTH;
+      return renderDetails();
     }
     elements.detailsEmpty.hidden = Boolean(details);
     elements.detailsContent.hidden = !details;
     elements.directFormulaList.replaceChildren();
     elements.calculationTree.replaceChildren();
+    treeController.setExpandable(false, false);
     if (!details) return;
 
     elements.selectedValue.textContent = details.value.displayText;
@@ -311,7 +296,9 @@
         elements.calculationTree.appendChild(renderDerivation(derivation));
       });
     }
-    requestAnimationFrame(applyTreeView);
+    const hasDeferredBranches = Store.treeHasDeferredBranches(details.tree);
+    treeController.setExpandable(hasDeferredBranches, treeDepth >= Store.MAX_TREE_DEPTH);
+    requestAnimationFrame(treeController.apply);
   }
 
   function render() {
@@ -356,54 +343,6 @@
 
   bindSlot(elements.slotX, "x");
   bindSlot(elements.slotY, "y");
-
-  elements.treeZoomOut.addEventListener("click", () => zoomTree(-TreeViewport.SCALE_STEP));
-  elements.treeZoomIn.addEventListener("click", () => zoomTree(TreeViewport.SCALE_STEP));
-  elements.treeResetView.addEventListener("click", resetTreeView);
-
-  elements.calculationTreeViewport.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;
-    treePan = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
-    elements.calculationTreeViewport.setPointerCapture(event.pointerId);
-    elements.calculationTreeViewport.focus();
-  });
-  elements.calculationTreeViewport.addEventListener("pointermove", (event) => {
-    if (!treePan || treePan.pointerId !== event.pointerId) return;
-    event.preventDefault();
-    panTree(event.clientX - treePan.lastX, event.clientY - treePan.lastY);
-    treePan.lastX = event.clientX;
-    treePan.lastY = event.clientY;
-  });
-  function stopTreePan(event) {
-    if (treePan && treePan.pointerId === event.pointerId) treePan = null;
-  }
-  elements.calculationTreeViewport.addEventListener("pointerup", stopTreePan);
-  elements.calculationTreeViewport.addEventListener("pointercancel", stopTreePan);
-  elements.calculationTreeViewport.addEventListener("wheel", (event) => {
-    if (event.ctrlKey || event.metaKey) return;
-    const deltaY = TreeViewport.wheelDeltaToPixels(
-      event.deltaY,
-      event.deltaMode,
-      elements.calculationTreeViewport.clientHeight
-    );
-    const previousY = treeView.y;
-    panTree(0, -deltaY);
-    if (treeView.y !== previousY) event.preventDefault();
-  }, { passive: false });
-  elements.calculationTreeViewport.addEventListener("keydown", (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const movements = {
-      w: [0, TreeViewport.PAN_STEP],
-      a: [TreeViewport.PAN_STEP, 0],
-      s: [0, -TreeViewport.PAN_STEP],
-      d: [-TreeViewport.PAN_STEP, 0],
-    };
-    const movement = movements[event.key.toLowerCase()];
-    if (!movement) return;
-    event.preventDefault();
-    panTree(...movement);
-  });
-  window.addEventListener("resize", applyTreeView);
 
   elements.add.addEventListener("click", () => {
     if (!preview || !preview.ok || !state.inputXId || !state.inputYId) return;
@@ -468,6 +407,6 @@
   root.EMLApp = {
     getState: () => JSON.parse(JSON.stringify(state)),
     getPreview: () => preview ? JSON.parse(JSON.stringify(preview)) : null,
-    getTreeView: () => ({ scale: treeView.scale, x: treeView.x, y: treeView.y }),
+    getTreeView: treeController.getView,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

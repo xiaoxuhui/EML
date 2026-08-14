@@ -11,11 +11,15 @@ const template = fs.readFileSync(path.join(srcDir, "template.html"), "utf8");
 const styles = fs.readFileSync(path.join(srcDir, "styles.css"), "utf8");
 const scriptFiles = [
   "expression.js",
+  "expression-properties.js",
+  "rules-transcendental.js",
+  "rules-algebra.js",
   "formula-rules.js",
   "evaluator.js",
   "value-store.js",
   "persistence.js",
   "tree-viewport.js",
+  "tree-controller.js",
   "app.js",
 ];
 const scripts = scriptFiles

@@ -315,6 +315,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
               <output id="treeZoomLevel" class="zoom-level" aria-live="polite">100%</output>
               <button type="button" id="treeZoomIn" class="icon-button" title="放大计算树" aria-label="放大计算树">+</button>
               <button type="button" id="treeResetView" class="icon-button" title="复位计算树视图" aria-label="复位计算树视图">↺</button>
+              <button type="button" id="treeExpandMore" class="icon-button" title="展开更多计算层级" aria-label="展开更多计算层级">⇣</button>
             </div>
           </div>
           <div id="calculationTreeViewport" class="tree-viewport" tabindex="0" aria-label="完整计算树，可拖动或使用 W A S D 键移动">
@@ -365,6 +366,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const E = constant("e");
   const PI = constant("pi");
   const I = constant("i");
+  const MAX_EXPRESSION_DEPTH = 64;
+  const MAX_EXPRESSION_NODES = 2000;
+  const ALLOWED_CONSTANTS = new Set(["e", "pi", "i"]);
 
   function canonicalKey(expression) {
     switch (expression.type) {
@@ -560,13 +564,56 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }
   }
 
-  function isValidExpression(expression) {
-    try {
-      canonicalKey(expression);
-      return true;
-    } catch {
-      return false;
+  function validateExpression(expression, options) {
+    const maxDepth = options?.maxDepth ?? MAX_EXPRESSION_DEPTH;
+    const maxNodes = options?.maxNodes ?? MAX_EXPRESSION_NODES;
+    const active = new Set();
+    let nodeCount = 0;
+
+    function visit(node, depth) {
+      if (!node || typeof node !== "object" || Array.isArray(node)) return false;
+      if (depth > maxDepth || nodeCount >= maxNodes || active.has(node)) return false;
+      nodeCount += 1;
+      active.add(node);
+      let valid = false;
+      switch (node.type) {
+        case TYPES.CONSTANT:
+          valid = ALLOWED_CONSTANTS.has(node.name);
+          break;
+        case TYPES.INTEGER:
+          valid = typeof node.value === "number" && Number.isSafeInteger(node.value);
+          break;
+        case TYPES.NEG:
+          valid = visit(node.child, depth + 1);
+          break;
+        case TYPES.ADD:
+        case TYPES.SUB:
+        case TYPES.MUL:
+          valid = visit(node.left, depth + 1) && visit(node.right, depth + 1);
+          break;
+        case TYPES.DIV:
+          valid = visit(node.numerator, depth + 1) && visit(node.denominator, depth + 1);
+          break;
+        case TYPES.POW:
+          valid = visit(node.base, depth + 1) && visit(node.exponent, depth + 1);
+          break;
+        case TYPES.LN:
+        case TYPES.SQRT:
+        case TYPES.SIN:
+          valid = visit(node.argument, depth + 1);
+          break;
+        default:
+          valid = false;
+      }
+      active.delete(node);
+      return valid;
     }
+
+    return { ok: visit(expression, 0), nodeCount };
+  }
+
+  function isValidExpression(expression, options) {
+    return validateExpression(expression, options).ok;
   }
 
   return {
@@ -587,6 +634,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     E,
     PI,
     I,
+    MAX_EXPRESSION_DEPTH,
+    MAX_EXPRESSION_NODES,
     canonicalKey,
     isSame,
     isInteger,
@@ -594,161 +643,24 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     render,
     approximate,
     isValidExpression,
+    validateExpression,
   };
 });
 
 
-/* formula-rules.js */
+/* expression-properties.js */
 (function (root, factory) {
+  "use strict";
   const expression = typeof module === "object" && module.exports
     ? require("./expression.js")
     : root.EMLExpression;
   const api = factory(expression);
   if (typeof module === "object" && module.exports) module.exports = api;
-  root.EMLFormulaRules = api;
+  root.EMLExpressionProperties = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Expr) {
   "use strict";
 
-  const {
-    TYPES, ONE, ZERO, E, PI, I,
-    integer, neg, add, sub, mul, div, pow,
-    canonicalKey, isSame, isInteger, isConstant, render,
-  } = Expr;
-
-  const rules = [
-    { id: "EXP_ZERO", label: "e^0 = 1" },
-    { id: "EXP_ONE", label: "e^1 = e" },
-    { id: "EXP_LN_FORMAL", label: "e^(ln(a)) = a（形式化反函数，a 不为明确的 0）" },
-    { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
-    { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
-    { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
-    { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
-    { id: "EXP_HALF", label: "e^(1 / 2) = √(e)" },
-    { id: "EXP_HALF_LN", label: "e^(ln(a) / 2) = √(a)（形式化规则）" },
-    { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
-    { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
-    { id: "EULER_HALF_IDENTITY", label: "e^(iπ / 2) = i" },
-    { id: "EULER_NEG_HALF_IDENTITY", label: "e^(-iπ / 2) = -i" },
-    { id: "LN_ONE", label: "ln(1) = 0" },
-    { id: "LN_E", label: "ln(e) = 1" },
-    { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
-    { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
-    { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
-    { id: "LN_EXP_QUOTIENT", label: "ln(e^a / b) = a - ln(b)（b ≠ 0，形式化规则）" },
-    { id: "LN_RECIPROCAL", label: "ln(1 / a) = -ln(a)（a ≠ 0，形式化规则）" },
-    { id: "NEG_INTEGER", label: "负整数化简" },
-    { id: "NEG_DOUBLE", label: "-(-a) = a" },
-    { id: "INTEGER_ADD", label: "整数加法" },
-    { id: "INTEGER_SUB", label: "整数减法" },
-    { id: "INTEGER_MUL", label: "整数乘法" },
-    { id: "ADD_ZERO", label: "a + 0 = a" },
-    { id: "ADD_INVERSE", label: "a + (-a) = 0" },
-    { id: "ADD_SUB_CANCEL", label: "(a - b) + b = a" },
-    { id: "SUB_ZERO", label: "a - 0 = a" },
-    { id: "SUB_SELF", label: "a - a = 0" },
-    { id: "SUB_NESTED_LEFT", label: "a - (a - b) = b" },
-    { id: "SUB_NESTED_RIGHT", label: "(a - b) - a = -b" },
-    { id: "SUB_NEGATIVE", label: "a - (-b) = a + b" },
-    { id: "SUB_ADDED_LEFT", label: "a - (a + b) = -b" },
-    { id: "SUB_ADDED_CANCEL", label: "(a + b) - a = b" },
-    { id: "MUL_ONE", label: "a × 1 = a" },
-    { id: "MUL_ZERO", label: "a × 0 = 0" },
-    { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
-    { id: "I_SQUARED", label: "i × i = -1" },
-    { id: "MUL_NEG_FACTOR", label: "(-a)b = -(ab)" },
-    { id: "I_TIMES_I_FACTOR", label: "i(ia) = -a" },
-    { id: "DIV_ONE", label: "a / 1 = a" },
-    { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
-    { id: "DIV_I", label: "a / i = -ai" },
-    { id: "DIV_NEG_I", label: "a / (-i) = ai" },
-    { id: "EULER_SINE", label: "(e^(ia) - e^(-ia)) / (2i) = sin(a)" },
-    { id: "INTEGER_DIV", label: "整除运算" },
-  ];
-
-  function isIpi(expression) {
-    if (expression.type !== TYPES.MUL) return false;
-    return (
-      (isConstant(expression.left, "i") && isConstant(expression.right, "pi")) ||
-      (isConstant(expression.left, "pi") && isConstant(expression.right, "i"))
-    );
-  }
-
-  function isNegativeIpi(expression) {
-    return expression.type === TYPES.NEG && isIpi(expression.child);
-  }
-
-  function isHalfIpi(expression) {
-    return (
-      expression.type === TYPES.DIV &&
-      isIpi(expression.numerator) &&
-      isInteger(expression.denominator, 2)
-    );
-  }
-
-  function isNegativeHalfIpi(expression) {
-    if (expression.type === TYPES.NEG) return isHalfIpi(expression.child);
-    return (
-      expression.type === TYPES.DIV &&
-      isNegativeIpi(expression.numerator) &&
-      isInteger(expression.denominator, 2)
-    );
-  }
-
-  function halfLogarithmArgument(expression) {
-    if (
-      expression.type === TYPES.DIV &&
-      expression.numerator.type === TYPES.LN &&
-      isInteger(expression.denominator, 2)
-    ) {
-      return expression.numerator.argument;
-    }
-    if (expression.type !== TYPES.MUL) return null;
-    const factors = [expression.left, expression.right];
-    const logarithm = factors.find((factor) => factor.type === TYPES.LN);
-    const half = factors.find((factor) => (
-      factor.type === TYPES.DIV &&
-      isInteger(factor.numerator, 1) &&
-      isInteger(factor.denominator, 2)
-    ));
-    return logarithm && half ? logarithm.argument : null;
-  }
-
-  function imaginaryCoefficient(expression) {
-    if (isConstant(expression, "i")) return ONE;
-    if (expression.type === TYPES.NEG) {
-      const coefficient = imaginaryCoefficient(expression.child);
-      return coefficient ? neg(coefficient) : null;
-    }
-    if (expression.type !== TYPES.MUL) return null;
-    if (isConstant(expression.left, "i")) return expression.right;
-    if (isConstant(expression.right, "i")) return expression.left;
-    return null;
-  }
-
-  function isTwoI(expression) {
-    return expression.type === TYPES.MUL && (
-      (isInteger(expression.left, 2) && isConstant(expression.right, "i")) ||
-      (isConstant(expression.left, "i") && isInteger(expression.right, 2))
-    );
-  }
-
-  function eulerSineArgument(expression) {
-    if (expression.type !== TYPES.DIV || !isTwoI(expression.denominator)) return null;
-    const numerator = expression.numerator;
-    if (numerator.type !== TYPES.SUB) return null;
-    const [left, right] = [numerator.left, numerator.right];
-    if (
-      left.type !== TYPES.POW || right.type !== TYPES.POW ||
-      !isConstant(left.base, "e") || !isConstant(right.base, "e")
-    ) {
-      return null;
-    }
-    const leftCoefficient = imaginaryCoefficient(left.exponent);
-    const rightCoefficient = imaginaryCoefficient(right.exponent);
-    return leftCoefficient && rightCoefficient && isSame(rightCoefficient, neg(leftCoefficient))
-      ? leftCoefficient
-      : null;
-  }
+  const { TYPES, isConstant } = Expr;
 
   function isProvablyReal(expression) {
     switch (expression.type) {
@@ -768,6 +680,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         return isConstant(expression.base, "e") && isProvablyReal(expression.exponent);
       case TYPES.LN:
         return isProvablyPositive(expression.argument);
+      case TYPES.SQRT:
+        return isProvablyPositive(expression.argument);
+      case TYPES.SIN:
+        return isProvablyReal(expression.argument);
       default:
         return false;
     }
@@ -905,7 +821,128 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }
   }
 
-  function rewriteNode(expression) {
+  return {
+    realBounds,
+    isProvablyReal,
+    isProvablyPositive,
+    isProvablyNotOne,
+    isProvablyNonZero,
+    isProvablyPureImaginaryNonZero,
+  };
+});
+
+
+/* rules-transcendental.js */
+(function (root, factory) {
+  "use strict";
+  const expression = typeof module === "object" && module.exports ? require("./expression.js") : root.EMLExpression;
+  const properties = typeof module === "object" && module.exports
+    ? require("./expression-properties.js")
+    : root.EMLExpressionProperties;
+  const api = factory(expression, properties);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLTranscendentalRules = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Properties) {
+  "use strict";
+
+  const { TYPES, ONE, ZERO, E, PI, I, integer, neg, mul, div, pow, sub, isSame, isInteger, isConstant } = Expr;
+  const { isProvablyPositive, isProvablyNonZero } = Properties;
+
+  const rules = [
+    { id: "EXP_ZERO", label: "e^0 = 1" },
+    { id: "EXP_ONE", label: "e^1 = e" },
+    { id: "EXP_LN_FORMAL", label: "e^(ln(a)) = a（形式化反函数，a 不为明确的 0）" },
+    { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
+    { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
+    { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
+    { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
+    { id: "EXP_HALF", label: "e^(1 / 2) = √(e)" },
+    { id: "EXP_HALF_LN", label: "e^(ln(a) / 2) = √(a)（形式化规则）" },
+    { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
+    { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
+    { id: "EULER_HALF_IDENTITY", label: "e^(iπ / 2) = i" },
+    { id: "EULER_NEG_HALF_IDENTITY", label: "e^(-iπ / 2) = -i" },
+    { id: "LN_ONE", label: "ln(1) = 0" },
+    { id: "LN_E", label: "ln(e) = 1" },
+    { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
+    { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
+    { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
+    { id: "LN_EXP_QUOTIENT", label: "ln(e^a / b) = a - ln(b)（b ≠ 0，形式化规则）" },
+    { id: "LN_RECIPROCAL", label: "ln(1 / a) = -ln(a)（a ≠ 0，形式化规则）" },
+    { id: "EULER_SINE", label: "(e^(ia) - e^(-ia)) / (2i) = sin(a)" },
+  ];
+
+  function isIpi(expression) {
+    if (expression.type !== TYPES.MUL) return false;
+    return (
+      (isConstant(expression.left, "i") && isConstant(expression.right, "pi")) ||
+      (isConstant(expression.left, "pi") && isConstant(expression.right, "i"))
+    );
+  }
+
+  function isNegativeIpi(expression) {
+    return expression.type === TYPES.NEG && isIpi(expression.child);
+  }
+
+  function isHalfIpi(expression) {
+    return expression.type === TYPES.DIV && isIpi(expression.numerator) && isInteger(expression.denominator, 2);
+  }
+
+  function isNegativeHalfIpi(expression) {
+    if (expression.type === TYPES.NEG) return isHalfIpi(expression.child);
+    return expression.type === TYPES.DIV && isNegativeIpi(expression.numerator) && isInteger(expression.denominator, 2);
+  }
+
+  function halfLogarithmArgument(expression) {
+    if (
+      expression.type === TYPES.DIV && expression.numerator.type === TYPES.LN &&
+      isInteger(expression.denominator, 2)
+    ) return expression.numerator.argument;
+    if (expression.type !== TYPES.MUL) return null;
+    const factors = [expression.left, expression.right];
+    const logarithm = factors.find((factor) => factor.type === TYPES.LN);
+    const half = factors.find((factor) => (
+      factor.type === TYPES.DIV && isInteger(factor.numerator, 1) && isInteger(factor.denominator, 2)
+    ));
+    return logarithm && half ? logarithm.argument : null;
+  }
+
+  function imaginaryCoefficient(expression) {
+    if (isConstant(expression, "i")) return ONE;
+    if (expression.type === TYPES.NEG) {
+      const coefficient = imaginaryCoefficient(expression.child);
+      return coefficient ? neg(coefficient) : null;
+    }
+    if (expression.type !== TYPES.MUL) return null;
+    if (isConstant(expression.left, "i")) return expression.right;
+    if (isConstant(expression.right, "i")) return expression.left;
+    return null;
+  }
+
+  function isTwoI(expression) {
+    return expression.type === TYPES.MUL && (
+      (isInteger(expression.left, 2) && isConstant(expression.right, "i")) ||
+      (isConstant(expression.left, "i") && isInteger(expression.right, 2))
+    );
+  }
+
+  function eulerSineArgument(expression) {
+    if (expression.type !== TYPES.DIV || !isTwoI(expression.denominator)) return null;
+    const numerator = expression.numerator;
+    if (numerator.type !== TYPES.SUB) return null;
+    const [left, right] = [numerator.left, numerator.right];
+    if (
+      left.type !== TYPES.POW || right.type !== TYPES.POW ||
+      !isConstant(left.base, "e") || !isConstant(right.base, "e")
+    ) return null;
+    const leftCoefficient = imaginaryCoefficient(left.exponent);
+    const rightCoefficient = imaginaryCoefficient(right.exponent);
+    return leftCoefficient && rightCoefficient && isSame(rightCoefficient, neg(leftCoefficient))
+      ? leftCoefficient
+      : null;
+  }
+
+  function rewrite(expression) {
     if (expression.type === TYPES.POW && isConstant(expression.base, "e")) {
       if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
       if (isInteger(expression.exponent, 1)) return { expression: E, ruleId: "EXP_ONE" };
@@ -914,26 +951,18 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         return { expression: Expr.sqrt(halfLogArgument), ruleId: "EXP_HALF_LN" };
       }
       if (
-        expression.exponent.type === TYPES.DIV &&
-        isInteger(expression.exponent.numerator, 1) &&
+        expression.exponent.type === TYPES.DIV && isInteger(expression.exponent.numerator, 1) &&
         isInteger(expression.exponent.denominator, 2)
-      ) {
-        return { expression: Expr.sqrt(E), ruleId: "EXP_HALF" };
-      }
+      ) return { expression: Expr.sqrt(E), ruleId: "EXP_HALF" };
       if (isIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_IDENTITY" };
-      if (isNegativeIpi(expression.exponent)) {
-        return { expression: integer(-1), ruleId: "EULER_NEG_IDENTITY" };
-      }
+      if (isNegativeIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_NEG_IDENTITY" };
       if (isHalfIpi(expression.exponent)) return { expression: I, ruleId: "EULER_HALF_IDENTITY" };
-      if (isNegativeHalfIpi(expression.exponent)) {
-        return { expression: neg(I), ruleId: "EULER_NEG_HALF_IDENTITY" };
-      }
+      if (isNegativeHalfIpi(expression.exponent)) return { expression: neg(I), ruleId: "EULER_NEG_HALF_IDENTITY" };
       if (expression.exponent.type === TYPES.LN && !isInteger(expression.exponent.argument, 0)) {
         return { expression: expression.exponent.argument, ruleId: "EXP_LN_FORMAL" };
       }
       if (
-        expression.exponent.type === TYPES.SUB &&
-        expression.exponent.right.type === TYPES.LN &&
+        expression.exponent.type === TYPES.SUB && expression.exponent.right.type === TYPES.LN &&
         isProvablyNonZero(expression.exponent.right.argument)
       ) {
         return {
@@ -942,44 +971,26 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         };
       }
       if (
-        expression.exponent.type === TYPES.NEG &&
-        expression.exponent.child.type === TYPES.LN &&
+        expression.exponent.type === TYPES.NEG && expression.exponent.child.type === TYPES.LN &&
         isProvablyNonZero(expression.exponent.child.argument)
-      ) {
-        return {
-          expression: div(ONE, expression.exponent.child.argument),
-          ruleId: "EXP_NEG_LN",
-        };
-      }
+      ) return { expression: div(ONE, expression.exponent.child.argument), ruleId: "EXP_NEG_LN" };
       if (
-        expression.exponent.type === TYPES.ADD &&
-        expression.exponent.left.type === TYPES.LN &&
-        expression.exponent.right.type === TYPES.LN &&
-        !isInteger(expression.exponent.left.argument, 0) &&
+        expression.exponent.type === TYPES.ADD && expression.exponent.left.type === TYPES.LN &&
+        expression.exponent.right.type === TYPES.LN && !isInteger(expression.exponent.left.argument, 0) &&
         !isInteger(expression.exponent.right.argument, 0)
       ) {
         return {
-          expression: mul(
-            expression.exponent.left.argument,
-            expression.exponent.right.argument
-          ),
+          expression: mul(expression.exponent.left.argument, expression.exponent.right.argument),
           ruleId: "EXP_ADD_LN",
         };
       }
       if (expression.exponent.type === TYPES.ADD) {
         const logarithm = expression.exponent.left.type === TYPES.LN
           ? expression.exponent.left
-          : expression.exponent.right.type === TYPES.LN
-            ? expression.exponent.right
-            : null;
+          : expression.exponent.right.type === TYPES.LN ? expression.exponent.right : null;
         if (logarithm && !isInteger(logarithm.argument, 0)) {
-          const other = logarithm === expression.exponent.left
-            ? expression.exponent.right
-            : expression.exponent.left;
-          return {
-            expression: mul(logarithm.argument, pow(E, other)),
-            ruleId: "EXP_SUM_LN_FACTOR",
-          };
+          const other = logarithm === expression.exponent.left ? expression.exponent.right : expression.exponent.left;
+          return { expression: mul(logarithm.argument, pow(E, other)), ruleId: "EXP_SUM_LN_FACTOR" };
         }
       }
     }
@@ -991,36 +1002,101 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         return { expression: expression.argument.exponent, ruleId: "LN_EXP_FORMAL" };
       }
       if (
-        expression.argument.type === TYPES.DIV &&
-        expression.argument.numerator.type === TYPES.POW &&
-        isConstant(expression.argument.numerator.base, "e") &&
-        isProvablyNonZero(expression.argument.denominator)
+        expression.argument.type === TYPES.DIV && expression.argument.numerator.type === TYPES.POW &&
+        isConstant(expression.argument.numerator.base, "e") && isProvablyNonZero(expression.argument.denominator)
       ) {
         return {
-          expression: sub(
-            expression.argument.numerator.exponent,
-            Expr.ln(expression.argument.denominator)
-          ),
+          expression: sub(expression.argument.numerator.exponent, Expr.ln(expression.argument.denominator)),
           ruleId: "LN_EXP_QUOTIENT",
         };
       }
       if (
-        expression.argument.type === TYPES.DIV &&
-        isInteger(expression.argument.numerator, 1) &&
+        expression.argument.type === TYPES.DIV && isInteger(expression.argument.numerator, 1) &&
         isProvablyNonZero(expression.argument.denominator)
-      ) {
-        return {
-          expression: neg(Expr.ln(expression.argument.denominator)),
-          ruleId: "LN_RECIPROCAL",
-        };
-      }
+      ) return { expression: neg(Expr.ln(expression.argument.denominator)), ruleId: "LN_RECIPROCAL" };
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
     }
 
+    if (
+      expression.type === TYPES.SUB && expression.left.type === TYPES.LN && expression.right.type === TYPES.LN &&
+      isProvablyNonZero(expression.left.argument) && isProvablyPositive(expression.right.argument)
+    ) {
+      return {
+        expression: Expr.ln(div(expression.left.argument, expression.right.argument)),
+        ruleId: "LN_QUOTIENT_POSITIVE_DENOMINATOR",
+      };
+    }
+
+    if (expression.type === TYPES.DIV) {
+      const sineArgument = eulerSineArgument(expression);
+      if (sineArgument) return { expression: Expr.sin(sineArgument), ruleId: "EULER_SINE" };
+    }
+    return null;
+  }
+
+  return {
+    name: "transcendental",
+    rules,
+    rewrite,
+    isIpi,
+    isNegativeIpi,
+    isHalfIpi,
+    isNegativeHalfIpi,
+    eulerSineArgument,
+  };
+});
+
+
+
+/* rules-algebra.js */
+(function (root, factory) {
+  "use strict";
+  const expression = typeof module === "object" && module.exports ? require("./expression.js") : root.EMLExpression;
+  const properties = typeof module === "object" && module.exports
+    ? require("./expression-properties.js")
+    : root.EMLExpressionProperties;
+  const api = factory(expression, properties);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLAlgebraRules = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Properties) {
+  "use strict";
+
+  const { TYPES, ONE, ZERO, I, integer, neg, add, mul, isSame, isInteger, isConstant } = Expr;
+  const { isProvablyNonZero } = Properties;
+
+  const rules = [
+    { id: "NEG_INTEGER", label: "负整数化简" },
+    { id: "NEG_DOUBLE", label: "-(-a) = a" },
+    { id: "INTEGER_ADD", label: "整数加法" },
+    { id: "INTEGER_SUB", label: "整数减法" },
+    { id: "INTEGER_MUL", label: "整数乘法" },
+    { id: "ADD_ZERO", label: "a + 0 = a" },
+    { id: "ADD_INVERSE", label: "a + (-a) = 0" },
+    { id: "ADD_SUB_CANCEL", label: "(a - b) + b = a" },
+    { id: "SUB_ZERO", label: "a - 0 = a" },
+    { id: "SUB_SELF", label: "a - a = 0" },
+    { id: "SUB_NESTED_LEFT", label: "a - (a - b) = b" },
+    { id: "SUB_NESTED_RIGHT", label: "(a - b) - a = -b" },
+    { id: "SUB_NEGATIVE", label: "a - (-b) = a + b" },
+    { id: "SUB_ADDED_LEFT", label: "a - (a + b) = -b" },
+    { id: "SUB_ADDED_CANCEL", label: "(a + b) - a = b" },
+    { id: "MUL_ONE", label: "a × 1 = a" },
+    { id: "MUL_ZERO", label: "a × 0 = 0" },
+    { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
+    { id: "I_SQUARED", label: "i × i = -1" },
+    { id: "MUL_NEG_FACTOR", label: "(-a)b = -(ab)" },
+    { id: "I_TIMES_I_FACTOR", label: "i(ia) = -a" },
+    { id: "DIV_ONE", label: "a / 1 = a" },
+    { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
+    { id: "DIV_I", label: "a / i = -ai" },
+    { id: "DIV_NEG_I", label: "a / (-i) = ai" },
+    { id: "INTEGER_DIV", label: "整除运算" },
+  ];
+
+  function rewrite(expression) {
     if (expression.type === TYPES.NEG && expression.child.type === TYPES.NEG) {
       return { expression: expression.child.child, ruleId: "NEG_DOUBLE" };
     }
-
     if (expression.type === TYPES.NEG && expression.child.type === TYPES.INTEGER) {
       return { expression: integer(-expression.child.value), ruleId: "NEG_INTEGER" };
     }
@@ -1046,17 +1122,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }
 
     if (expression.type === TYPES.SUB) {
-      if (
-        expression.left.type === TYPES.LN &&
-        expression.right.type === TYPES.LN &&
-        isProvablyNonZero(expression.left.argument) &&
-        isProvablyPositive(expression.right.argument)
-      ) {
-        return {
-          expression: Expr.ln(div(expression.left.argument, expression.right.argument)),
-          ruleId: "LN_QUOTIENT_POSITIVE_DENOMINATOR",
-        };
-      }
       if (expression.left.type === TYPES.INTEGER && expression.right.type === TYPES.INTEGER) {
         return { expression: integer(expression.left.value - expression.right.value), ruleId: "INTEGER_SUB" };
       }
@@ -1106,20 +1171,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         return { expression: neg(mul(expression.left, expression.right.child)), ruleId: "MUL_NEG_FACTOR" };
       }
       if (isConstant(expression.left, "i") && expression.right.type === TYPES.MUL) {
-        if (isConstant(expression.right.left, "i")) {
-          return { expression: neg(expression.right.right), ruleId: "I_TIMES_I_FACTOR" };
-        }
-        if (isConstant(expression.right.right, "i")) {
-          return { expression: neg(expression.right.left), ruleId: "I_TIMES_I_FACTOR" };
-        }
+        if (isConstant(expression.right.left, "i")) return { expression: neg(expression.right.right), ruleId: "I_TIMES_I_FACTOR" };
+        if (isConstant(expression.right.right, "i")) return { expression: neg(expression.right.left), ruleId: "I_TIMES_I_FACTOR" };
       }
       if (isConstant(expression.right, "i") && expression.left.type === TYPES.MUL) {
-        if (isConstant(expression.left.left, "i")) {
-          return { expression: neg(expression.left.right), ruleId: "I_TIMES_I_FACTOR" };
-        }
-        if (isConstant(expression.left.right, "i")) {
-          return { expression: neg(expression.left.left), ruleId: "I_TIMES_I_FACTOR" };
-        }
+        if (isConstant(expression.left.left, "i")) return { expression: neg(expression.left.right), ruleId: "I_TIMES_I_FACTOR" };
+        if (isConstant(expression.left.right, "i")) return { expression: neg(expression.left.left), ruleId: "I_TIMES_I_FACTOR" };
       }
       if (isInteger(expression.left, 1)) return { expression: expression.right, ruleId: "MUL_ONE" };
       if (isInteger(expression.right, 1)) return { expression: expression.left, ruleId: "MUL_ONE" };
@@ -1128,8 +1185,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }
 
     if (expression.type === TYPES.DIV) {
-      const sineArgument = eulerSineArgument(expression);
-      if (sineArgument) return { expression: Expr.sin(sineArgument), ruleId: "EULER_SINE" };
       if (isInteger(expression.denominator, 1)) return { expression: expression.numerator, ruleId: "DIV_ONE" };
       if (isSame(expression.numerator, expression.denominator) && isProvablyNonZero(expression.numerator)) {
         return { expression: ONE, ruleId: "DIV_SELF" };
@@ -1137,25 +1192,61 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       if (isConstant(expression.denominator, "i")) {
         return { expression: neg(mul(expression.numerator, I)), ruleId: "DIV_I" };
       }
-      if (
-        expression.denominator.type === TYPES.NEG &&
-        isConstant(expression.denominator.child, "i")
-      ) {
+      if (expression.denominator.type === TYPES.NEG && isConstant(expression.denominator.child, "i")) {
         return { expression: mul(expression.numerator, I), ruleId: "DIV_NEG_I" };
       }
       if (
-        expression.numerator.type === TYPES.INTEGER &&
-        expression.denominator.type === TYPES.INTEGER &&
-        expression.denominator.value !== 0 &&
-        expression.numerator.value % expression.denominator.value === 0
+        expression.numerator.type === TYPES.INTEGER && expression.denominator.type === TYPES.INTEGER &&
+        expression.denominator.value !== 0 && expression.numerator.value % expression.denominator.value === 0
       ) {
-        return {
-          expression: integer(expression.numerator.value / expression.denominator.value),
-          ruleId: "INTEGER_DIV",
-        };
+        return { expression: integer(expression.numerator.value / expression.denominator.value), ruleId: "INTEGER_DIV" };
       }
     }
+    return null;
+  }
 
+  return { name: "algebra", rules, rewrite };
+});
+
+
+
+/* formula-rules.js */
+(function (root, factory) {
+  "use strict";
+  const expression = typeof module === "object" && module.exports ? require("./expression.js") : root.EMLExpression;
+  const properties = typeof module === "object" && module.exports
+    ? require("./expression-properties.js")
+    : root.EMLExpressionProperties;
+  const transcendental = typeof module === "object" && module.exports
+    ? require("./rules-transcendental.js")
+    : root.EMLTranscendentalRules;
+  const algebra = typeof module === "object" && module.exports
+    ? require("./rules-algebra.js")
+    : root.EMLAlgebraRules;
+  const api = factory(expression, properties, transcendental, algebra);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLFormulaRules = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Properties, Transcendental, Algebra) {
+  "use strict";
+
+  const { TYPES, neg, add, sub, mul, div, pow, canonicalKey, isConstant, render } = Expr;
+  const MAX_SIMPLIFY_ITERATIONS = 50;
+  const registries = [Transcendental, Algebra];
+  const rules = registries.flatMap((registry) => registry.rules);
+  const ruleIds = new Set();
+
+  for (const rule of rules) {
+    if (!rule || !rule.id || ruleIds.has(rule.id)) throw new Error(`公式规则编号重复或无效：${rule?.id || "未知"}`);
+    ruleIds.add(rule.id);
+  }
+
+  function rewriteNode(expression) {
+    for (const registry of registries) {
+      const rewritten = registry.rewrite(expression);
+      if (!rewritten) continue;
+      if (!ruleIds.has(rewritten.ruleId)) throw new Error(`公式规则未注册：${rewritten.ruleId}`);
+      return rewritten;
+    }
     return null;
   }
 
@@ -1175,9 +1266,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       case TYPES.POW:
         return pow(simplifyChild(expression.base), simplifyChild(expression.exponent));
       case TYPES.LN:
-        if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) {
-          return expression;
-        }
+        if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) return expression;
         return Expr.ln(simplifyChild(expression.argument));
       case TYPES.SQRT:
         return Expr.sqrt(simplifyChild(expression.argument));
@@ -1193,41 +1282,35 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     let current = expression;
     let iterations = 0;
 
-    while (iterations < 50) {
+    while (iterations < MAX_SIMPLIFY_ITERATIONS) {
       iterations += 1;
       const withChildren = rewriteChildren(current, steps);
       const rewritten = rewriteNode(withChildren);
       const next = rewritten ? rewritten.expression : withChildren;
 
       if (rewritten) {
-        steps.push({
-          ruleId: rewritten.ruleId,
-          before: render(withChildren),
-          after: render(next),
-        });
+        steps.push({ ruleId: rewritten.ruleId, before: render(withChildren), after: render(next) });
       }
-
-      if (canonicalKey(next) === canonicalKey(current)) {
-        return { expression: next, steps };
-      }
+      if (canonicalKey(next) === canonicalKey(current)) return { expression: next, steps };
       current = next;
     }
-
     return { expression: current, steps, limitReached: true };
   }
 
   return {
     rules,
+    registries: registries.map((registry) => ({ name: registry.name, ruleIds: registry.rules.map((rule) => rule.id) })),
+    MAX_SIMPLIFY_ITERATIONS,
     simplify,
-    isIpi,
-    isNegativeIpi,
-    isHalfIpi,
-    isNegativeHalfIpi,
-    eulerSineArgument,
-    isProvablyReal,
-    isProvablyPositive,
-    isProvablyNonZero,
-    isProvablyPureImaginaryNonZero,
+    isIpi: Transcendental.isIpi,
+    isNegativeIpi: Transcendental.isNegativeIpi,
+    isHalfIpi: Transcendental.isHalfIpi,
+    isNegativeHalfIpi: Transcendental.isNegativeHalfIpi,
+    eulerSineArgument: Transcendental.eulerSineArgument,
+    isProvablyReal: Properties.isProvablyReal,
+    isProvablyPositive: Properties.isProvablyPositive,
+    isProvablyNonZero: Properties.isProvablyNonZero,
+    isProvablyPureImaginaryNonZero: Properties.isProvablyPureImaginaryNonZero,
   };
 });
 
@@ -1288,6 +1371,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const valueIdFor = (canonicalKey) => encodeId("value", canonicalKey);
   const derivationIdFor = (formulaKey) => encodeId("derivation", formulaKey);
   const initialValueId = valueIdFor(Expr.canonicalKey(Expr.ONE));
+  const DEFAULT_TREE_DEPTH = 4;
+  const MAX_TREE_DEPTH = 32;
+  const MAX_TREE_NODES = 800;
 
   function createInitialValue() {
     return {
@@ -1418,34 +1504,58 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return next;
   }
 
-  function buildValueTree(state, valueId, visited) {
-    const value = state.values[valueId];
-    if (!value) return { type: "missing", valueId };
-    const path = new Set(visited || []);
-    if (path.has(valueId)) return { type: "cycle", valueId, label: value.displayText };
-    path.add(valueId);
+  function buildValueTree(state, valueId, options) {
+    const maxDepth = options?.maxDepth ?? Infinity;
+    const maxNodes = options?.maxNodes ?? Infinity;
+    const budget = { count: 0 };
 
-    return {
-      type: "value",
-      valueId,
-      label: value.displayText,
-      initial: value.protected && value.derivationIds.length === 0,
-      derivations: value.derivationIds.map((derivationId) => {
-        const derivation = state.derivations[derivationId];
-        if (!derivation) return { type: "missing-derivation", derivationId };
-        return {
-          type: "derivation",
-          derivationId,
-          directFormula: derivation.directFormula,
-          rewriteSteps: derivation.rewriteSteps,
-          x: buildValueTree(state, derivation.xValueId, path),
-          y: buildValueTree(state, derivation.yValueId, path),
-        };
-      }),
-    };
+    function buildNode(currentValueId, path, depth) {
+      const value = state.values[currentValueId];
+      if (!value) return { type: "missing", valueId: currentValueId };
+      if (path.has(currentValueId)) return { type: "cycle", valueId: currentValueId, label: value.displayText };
+      if (budget.count >= maxNodes) {
+        return { type: "deferred", valueId: currentValueId, label: value.displayText, reason: "node-limit" };
+      }
+      budget.count += 1;
+      if (depth >= maxDepth && value.derivationIds.length > 0) {
+        return { type: "deferred", valueId: currentValueId, label: value.displayText, reason: "depth-limit" };
+      }
+
+      const nextPath = new Set(path);
+      nextPath.add(currentValueId);
+      return {
+        type: "value",
+        valueId: currentValueId,
+        label: value.displayText,
+        initial: value.protected && value.derivationIds.length === 0,
+        derivations: value.derivationIds.map((derivationId) => {
+          const derivation = state.derivations[derivationId];
+          if (!derivation) return { type: "missing-derivation", derivationId };
+          return {
+            type: "derivation",
+            derivationId,
+            directFormula: derivation.directFormula,
+            rewriteSteps: derivation.rewriteSteps,
+            x: buildNode(derivation.xValueId, nextPath, depth + 1),
+            y: buildNode(derivation.yValueId, nextPath, depth + 1),
+          };
+        }),
+      };
+    }
+
+    return buildNode(valueId, new Set(), 0);
   }
 
-  function getDetails(state, valueId) {
+  function treeHasDeferredBranches(node) {
+    if (!node || typeof node !== "object") return false;
+    if (node.type === "deferred") return true;
+    if (!Array.isArray(node.derivations)) return false;
+    return node.derivations.some((derivation) => (
+      derivation && (treeHasDeferredBranches(derivation.x) || treeHasDeferredBranches(derivation.y))
+    ));
+  }
+
+  function getDetails(state, valueId, treeOptions) {
     const value = state.values[valueId];
     if (!value) return null;
     return {
@@ -1454,12 +1564,15 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         .map((id) => state.derivations[id])
         .filter(Boolean)
         .map((derivation) => derivation.directFormula),
-      tree: buildValueTree(state, valueId),
+      tree: buildValueTree(state, valueId, treeOptions),
     };
   }
 
   return {
     initialValueId,
+    DEFAULT_TREE_DEPTH,
+    MAX_TREE_DEPTH,
+    MAX_TREE_NODES,
     valueIdFor,
     formulaKeyFor,
     createInitialState,
@@ -1470,6 +1583,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     setInput,
     isReferenced,
     buildValueTree,
+    treeHasDeferredBranches,
     getDetails,
   };
 });
@@ -1490,12 +1604,46 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   "use strict";
 
   const CACHE_KEY = "eml_workbench_v2";
+  const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+  const MAX_VALUES = 2000;
+  const MAX_DERIVATIONS = 5000;
+  const MAX_REWRITE_STEPS = 200;
+  const MAX_TEXT_LENGTH = 2000;
+
+  const isShortString = (value, maximum = MAX_TEXT_LENGTH) => (
+    typeof value === "string" && value.length <= maximum
+  );
+
+  function hasDependencyCycle(state) {
+    const visiting = new Set();
+    const visited = new Set();
+
+    function visit(valueId) {
+      if (visiting.has(valueId)) return true;
+      if (visited.has(valueId)) return false;
+      visiting.add(valueId);
+      const value = state.values[valueId];
+      for (const derivationId of value.derivationIds) {
+        const derivation = state.derivations[derivationId];
+        if (derivation && (visit(derivation.xValueId) || visit(derivation.yValueId))) return true;
+      }
+      visiting.delete(valueId);
+      visited.add(valueId);
+      return false;
+    }
+
+    return state.valueOrder.some(visit);
+  }
 
   function validateState(candidate) {
     if (!candidate || candidate.schemaVersion !== 2) return { ok: false, error: "不支持的数据版本" };
     if (!candidate.values || typeof candidate.values !== "object") return { ok: false, error: "缺少数值数据" };
     if (!candidate.derivations || typeof candidate.derivations !== "object") return { ok: false, error: "缺少公式数据" };
     if (!Array.isArray(candidate.valueOrder)) return { ok: false, error: "数值顺序无效" };
+    if (candidate.valueOrder.length > MAX_VALUES) return { ok: false, error: "数值数量超过限制" };
+    if (Object.keys(candidate.derivations).length > MAX_DERIVATIONS) return { ok: false, error: "公式数量超过限制" };
+    if (new Set(candidate.valueOrder).size !== candidate.valueOrder.length) return { ok: false, error: "数值顺序存在重复" };
+    if (Object.keys(candidate.values).length !== candidate.valueOrder.length) return { ok: false, error: "数值索引不完整" };
 
     for (const valueId of candidate.valueOrder) {
       const value = candidate.values[valueId];
@@ -1505,13 +1653,29 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       if (Expr.canonicalKey(value.canonicalExpression) !== value.canonicalKey) {
         return { ok: false, error: "数值标识不一致" };
       }
+      if (!isShortString(value.displayText, 500) || !isShortString(value.canonicalKey, 2000)) {
+        return { ok: false, error: "数值文本无效" };
+      }
       if (!Array.isArray(value.derivationIds)) return { ok: false, error: "公式索引无效" };
+      if (new Set(value.derivationIds).size !== value.derivationIds.length) return { ok: false, error: "公式索引存在重复" };
     }
 
     for (const [derivationId, derivation] of Object.entries(candidate.derivations)) {
       if (!derivation || derivation.id !== derivationId) return { ok: false, error: "存在无效公式" };
       if (!candidate.values[derivation.xValueId] || !candidate.values[derivation.yValueId] || !candidate.values[derivation.resultValueId]) {
         return { ok: false, error: "公式引用了不存在的数值" };
+      }
+      if (derivation.operation !== "EML" || !isShortString(derivation.directFormula)) {
+        return { ok: false, error: "公式内容无效" };
+      }
+      if (!Expr.isValidExpression(derivation.rawExpression)) return { ok: false, error: "公式表达式无效" };
+      if (!Array.isArray(derivation.rewriteSteps) || derivation.rewriteSteps.length > MAX_REWRITE_STEPS) {
+        return { ok: false, error: "化简步骤无效" };
+      }
+      if (derivation.rewriteSteps.some((step) => (
+        !step || !isShortString(step.ruleId, 100) || !isShortString(step.before) || !isShortString(step.after)
+      ))) {
+        return { ok: false, error: "化简步骤内容无效" };
       }
       if (!candidate.values[derivation.resultValueId].derivationIds.includes(derivationId)) {
         return { ok: false, error: "公式与结果索引不一致" };
@@ -1526,10 +1690,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       return { ok: false, error: "选择状态引用了不存在的数值" };
     }
 
-    for (const valueId of candidate.valueOrder) {
-      const tree = ValueStore.buildValueTree(candidate, valueId);
-      if (JSON.stringify(tree).includes('"type":"cycle"')) return { ok: false, error: "公式来源存在循环引用" };
-    }
+    if (hasDependencyCycle(candidate)) return { ok: false, error: "公式来源存在循环引用" };
 
     return { ok: true, state: JSON.parse(JSON.stringify(candidate)) };
   }
@@ -1544,6 +1705,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   }
 
   function deserialize(text) {
+    if (typeof text !== "string" || text.length > MAX_IMPORT_BYTES) {
+      return { ok: false, error: "文件大小超过限制" };
+    }
     try {
       return validateState(JSON.parse(text));
     } catch {
@@ -1561,7 +1725,18 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return deserialize(text);
   }
 
-  return { CACHE_KEY, validateState, serialize, deserialize, saveToCache, loadFromCache };
+  return {
+    CACHE_KEY,
+    MAX_IMPORT_BYTES,
+    MAX_VALUES,
+    MAX_DERIVATIONS,
+    validateState,
+    hasDependencyCycle,
+    serialize,
+    deserialize,
+    saveToCache,
+    loadFromCache,
+  };
 });
 
 
@@ -1638,6 +1813,128 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 });
 
 
+/* tree-controller.js */
+(function (root, factory) {
+  "use strict";
+  const viewportModel = typeof module === "object" && module.exports
+    ? require("./tree-viewport.js")
+    : root.EMLTreeViewport;
+  const api = factory(viewportModel);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLTreeController = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (ViewportModel) {
+  "use strict";
+
+  function create(options) {
+    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton, expandMore, onExpandMore } = options;
+    let view = { ...ViewportModel.reset(), valueId: null };
+    let pointer = null;
+
+    function dimensions() {
+      return {
+        viewportWidth: viewport.clientWidth,
+        viewportHeight: viewport.clientHeight,
+        contentWidth: canvas.scrollWidth,
+        contentHeight: canvas.scrollHeight,
+      };
+    }
+
+    function apply() {
+      const next = ViewportModel.clampPosition(view, dimensions());
+      view = { ...next, valueId: view.valueId };
+      canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+      zoomLevel.textContent = `${Math.round(view.scale * 100)}%`;
+      zoomOut.disabled = view.scale <= ViewportModel.MIN_SCALE;
+      zoomIn.disabled = view.scale >= ViewportModel.MAX_SCALE;
+    }
+
+    function zoom(delta) {
+      view = {
+        ...ViewportModel.zoomAt(
+          view,
+          view.scale + delta,
+          { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2 },
+          dimensions()
+        ),
+        valueId: view.valueId,
+      };
+      apply();
+    }
+
+    function pan(deltaX, deltaY) {
+      view = { ...ViewportModel.pan(view, deltaX, deltaY, dimensions()), valueId: view.valueId };
+      apply();
+    }
+
+    function reset(valueId = view.valueId) {
+      view = { ...ViewportModel.reset(), valueId };
+      apply();
+    }
+
+    zoomOut.addEventListener("click", () => zoom(-ViewportModel.SCALE_STEP));
+    zoomIn.addEventListener("click", () => zoom(ViewportModel.SCALE_STEP));
+    resetButton.addEventListener("click", () => reset());
+    expandMore.addEventListener("click", onExpandMore);
+
+    viewport.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;
+      pointer = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
+      viewport.setPointerCapture(event.pointerId);
+      viewport.focus();
+    });
+    viewport.addEventListener("pointermove", (event) => {
+      if (!pointer || pointer.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      pan(event.clientX - pointer.lastX, event.clientY - pointer.lastY);
+      pointer.lastX = event.clientX;
+      pointer.lastY = event.clientY;
+    });
+    const stopPointer = (event) => {
+      if (pointer && pointer.pointerId === event.pointerId) pointer = null;
+    };
+    viewport.addEventListener("pointerup", stopPointer);
+    viewport.addEventListener("pointercancel", stopPointer);
+    viewport.addEventListener("wheel", (event) => {
+      if (event.ctrlKey || event.metaKey) return;
+      const deltaY = ViewportModel.wheelDeltaToPixels(event.deltaY, event.deltaMode, viewport.clientHeight);
+      const previousY = view.y;
+      pan(0, -deltaY);
+      if (view.y !== previousY) event.preventDefault();
+    }, { passive: false });
+    viewport.addEventListener("keydown", (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const movements = {
+        w: [0, ViewportModel.PAN_STEP],
+        a: [ViewportModel.PAN_STEP, 0],
+        s: [0, -ViewportModel.PAN_STEP],
+        d: [-ViewportModel.PAN_STEP, 0],
+      };
+      const movement = movements[event.key.toLowerCase()];
+      if (!movement) return;
+      event.preventDefault();
+      pan(...movement);
+    });
+    window.addEventListener("resize", apply);
+
+    return {
+      apply,
+      ensureValue(valueId) {
+        if (view.valueId === valueId) return false;
+        view = { ...ViewportModel.reset(), valueId };
+        return true;
+      },
+      setExpandable(visible, disabled) {
+        expandMore.hidden = !visible;
+        expandMore.disabled = Boolean(disabled);
+      },
+      getView: () => ({ scale: view.scale, x: view.x, y: view.y }),
+    };
+  }
+
+  return { create };
+});
+
+
 /* app.js */
 (function (root) {
   "use strict";
@@ -1646,7 +1943,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const Evaluator = root.EMLEvaluator;
   const Store = root.EMLValueStore;
   const Persistence = root.EMLPersistence;
-  const TreeViewport = root.EMLTreeViewport;
+  const TreeController = root.EMLTreeController;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -1671,56 +1968,27 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     treeZoomIn: document.getElementById("treeZoomIn"),
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
+    treeExpandMore: document.getElementById("treeExpandMore"),
   };
 
   let state = restoreState();
   let preview = null;
   let pointerDrag = null;
   let suppressValueClick = false;
-  let treeView = { ...TreeViewport.reset(), valueId: null };
-  let treePan = null;
-
-  function treeDimensions() {
-    return {
-      viewportWidth: elements.calculationTreeViewport.clientWidth,
-      viewportHeight: elements.calculationTreeViewport.clientHeight,
-      contentWidth: elements.calculationTree.scrollWidth,
-      contentHeight: elements.calculationTree.scrollHeight,
-    };
-  }
-
-  function applyTreeView() {
-    const next = TreeViewport.clampPosition(treeView, treeDimensions());
-    treeView = { ...next, valueId: treeView.valueId };
-    elements.calculationTree.style.transform = `translate(${treeView.x}px, ${treeView.y}px) scale(${treeView.scale})`;
-    elements.treeZoomLevel.textContent = `${Math.round(treeView.scale * 100)}%`;
-    elements.treeZoomOut.disabled = treeView.scale <= TreeViewport.MIN_SCALE;
-    elements.treeZoomIn.disabled = treeView.scale >= TreeViewport.MAX_SCALE;
-  }
-
-  function zoomTree(delta) {
-    const viewport = elements.calculationTreeViewport;
-    treeView = {
-      ...TreeViewport.zoomAt(
-        treeView,
-        treeView.scale + delta,
-        { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2 },
-        treeDimensions()
-      ),
-      valueId: treeView.valueId,
-    };
-    applyTreeView();
-  }
-
-  function panTree(deltaX, deltaY) {
-    treeView = { ...TreeViewport.pan(treeView, deltaX, deltaY, treeDimensions()), valueId: treeView.valueId };
-    applyTreeView();
-  }
-
-  function resetTreeView() {
-    treeView = { ...TreeViewport.reset(), valueId: state.selectedValueId };
-    applyTreeView();
-  }
+  let treeDepth = Store.DEFAULT_TREE_DEPTH;
+  const treeController = TreeController.create({
+    viewport: elements.calculationTreeViewport,
+    canvas: elements.calculationTree,
+    zoomOut: elements.treeZoomOut,
+    zoomIn: elements.treeZoomIn,
+    zoomLevel: elements.treeZoomLevel,
+    resetButton: elements.treeResetView,
+    expandMore: elements.treeExpandMore,
+    onExpandMore: () => {
+      treeDepth = Math.min(Store.MAX_TREE_DEPTH, treeDepth + Store.DEFAULT_TREE_DEPTH);
+      renderDetails();
+    },
+  });
 
   function restoreState() {
     try {
@@ -1766,7 +2034,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   function renderCalculator() {
     renderSlot(elements.slotX, currentValue(state.inputXId), "x");
     renderSlot(elements.slotY, currentValue(state.inputYId), "y");
-    elements.result.classList.toggle("error", Boolean(preview && !preview.ok));
+    elements.result.classList.toggle("error", Boolean(preview && (!preview.ok || preview.limitReached)));
 
     if (!preview) {
       elements.result.textContent = "?";
@@ -1778,6 +2046,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (!preview.ok) {
       elements.result.textContent = "未定义";
       elements.directPreview.textContent = preview.error;
+      elements.add.disabled = true;
+      return;
+    }
+
+    if (preview.limitReached) {
+      elements.result.textContent = preview.displayText;
+      elements.directPreview.textContent = "化简达到安全上限，当前结果尚不能添加。";
       elements.add.disabled = true;
       return;
     }
@@ -1883,6 +2158,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
     if (node.type === "cycle") {
       item.append("（检测到循环，已停止展开）");
+    } else if (node.type === "deferred") {
+      item.append(node.reason === "node-limit" ? "（已达到节点显示上限）" : "（还有更早的来源）");
     } else if (node.derivations && node.derivations.length) {
       node.derivations.forEach((derivation) => item.appendChild(renderDerivation(derivation)));
     }
@@ -1917,14 +2194,19 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   }
 
   function renderDetails() {
-    const details = Store.getDetails(state, state.selectedValueId);
-    if (treeView.valueId !== state.selectedValueId) {
-      treeView = { ...TreeViewport.reset(), valueId: state.selectedValueId };
+    const details = Store.getDetails(state, state.selectedValueId, {
+      maxDepth: treeDepth,
+      maxNodes: Store.MAX_TREE_NODES,
+    });
+    if (treeController.ensureValue(state.selectedValueId)) {
+      treeDepth = Store.DEFAULT_TREE_DEPTH;
+      return renderDetails();
     }
     elements.detailsEmpty.hidden = Boolean(details);
     elements.detailsContent.hidden = !details;
     elements.directFormulaList.replaceChildren();
     elements.calculationTree.replaceChildren();
+    treeController.setExpandable(false, false);
     if (!details) return;
 
     elements.selectedValue.textContent = details.value.displayText;
@@ -1952,7 +2234,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         elements.calculationTree.appendChild(renderDerivation(derivation));
       });
     }
-    requestAnimationFrame(applyTreeView);
+    const hasDeferredBranches = Store.treeHasDeferredBranches(details.tree);
+    treeController.setExpandable(hasDeferredBranches, treeDepth >= Store.MAX_TREE_DEPTH);
+    requestAnimationFrame(treeController.apply);
   }
 
   function render() {
@@ -1997,54 +2281,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   bindSlot(elements.slotX, "x");
   bindSlot(elements.slotY, "y");
-
-  elements.treeZoomOut.addEventListener("click", () => zoomTree(-TreeViewport.SCALE_STEP));
-  elements.treeZoomIn.addEventListener("click", () => zoomTree(TreeViewport.SCALE_STEP));
-  elements.treeResetView.addEventListener("click", resetTreeView);
-
-  elements.calculationTreeViewport.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;
-    treePan = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
-    elements.calculationTreeViewport.setPointerCapture(event.pointerId);
-    elements.calculationTreeViewport.focus();
-  });
-  elements.calculationTreeViewport.addEventListener("pointermove", (event) => {
-    if (!treePan || treePan.pointerId !== event.pointerId) return;
-    event.preventDefault();
-    panTree(event.clientX - treePan.lastX, event.clientY - treePan.lastY);
-    treePan.lastX = event.clientX;
-    treePan.lastY = event.clientY;
-  });
-  function stopTreePan(event) {
-    if (treePan && treePan.pointerId === event.pointerId) treePan = null;
-  }
-  elements.calculationTreeViewport.addEventListener("pointerup", stopTreePan);
-  elements.calculationTreeViewport.addEventListener("pointercancel", stopTreePan);
-  elements.calculationTreeViewport.addEventListener("wheel", (event) => {
-    if (event.ctrlKey || event.metaKey) return;
-    const deltaY = TreeViewport.wheelDeltaToPixels(
-      event.deltaY,
-      event.deltaMode,
-      elements.calculationTreeViewport.clientHeight
-    );
-    const previousY = treeView.y;
-    panTree(0, -deltaY);
-    if (treeView.y !== previousY) event.preventDefault();
-  }, { passive: false });
-  elements.calculationTreeViewport.addEventListener("keydown", (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const movements = {
-      w: [0, TreeViewport.PAN_STEP],
-      a: [TreeViewport.PAN_STEP, 0],
-      s: [0, -TreeViewport.PAN_STEP],
-      d: [-TreeViewport.PAN_STEP, 0],
-    };
-    const movement = movements[event.key.toLowerCase()];
-    if (!movement) return;
-    event.preventDefault();
-    panTree(...movement);
-  });
-  window.addEventListener("resize", applyTreeView);
 
   elements.add.addEventListener("click", () => {
     if (!preview || !preview.ok || !state.inputXId || !state.inputYId) return;
@@ -2109,7 +2345,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   root.EMLApp = {
     getState: () => JSON.parse(JSON.stringify(state)),
     getPreview: () => preview ? JSON.parse(JSON.stringify(preview)) : null,
-    getTreeView: () => ({ scale: treeView.scale, x: treeView.x, y: treeView.y }),
+    getTreeView: treeController.getView,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
