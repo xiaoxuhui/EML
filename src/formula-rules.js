@@ -29,7 +29,7 @@
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
-    { id: "LN_EXP_QUOTIENT", label: "ln(e^a / b) = a - ln(b)（b > 0）" },
+    { id: "LN_EXP_QUOTIENT", label: "ln(e^a / b) = a - ln(b)（b ≠ 0，形式化规则）" },
     { id: "NEG_INTEGER", label: "负整数化简" },
     { id: "NEG_DOUBLE", label: "-(-a) = a" },
     { id: "INTEGER_ADD", label: "整数加法" },
@@ -285,7 +285,7 @@
         expression.argument.type === TYPES.DIV &&
         expression.argument.numerator.type === TYPES.POW &&
         isConstant(expression.argument.numerator.base, "e") &&
-        isProvablyPositive(expression.argument.denominator)
+        isProvablyNonZero(expression.argument.denominator)
       ) {
         return {
           expression: sub(

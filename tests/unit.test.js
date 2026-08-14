@@ -305,10 +305,17 @@ test("回归：e - ln(e^e / 2) 化简为 ln(2)", () => {
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
 });
 
-test("指数商对数规则不展开负分母", () => {
+test("指数商对数形式化规则支持非零负分母", () => {
   const argument = Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(-2));
   const result = Rules.simplify(Expr.ln(argument));
-  assert.equal(Expr.render(result.expression), "ln(e^(e) / -2)");
+  assert.equal(Expr.render(result.expression), "e - ln(-2)");
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
+});
+
+test("指数商对数规则不展开零分母", () => {
+  const argument = Expr.div(Expr.pow(Expr.E, Expr.E), Expr.ZERO);
+  const result = Rules.simplify(Expr.ln(argument));
+  assert.equal(Expr.render(result.expression), "ln(e^(e) / 0)");
   assert.equal(result.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"), false);
 });
 
@@ -341,4 +348,13 @@ test("负对数指数规则不消去 ln(0)", () => {
   const result = Rules.simplify(expression);
   assert.equal(Expr.render(result.expression), "e^(-ln(0))");
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_NEG_LN"), false);
+});
+
+test("回归：e - ln(e^e / (e - i)) 化简为 ln(e - i)", () => {
+  const denominator = Expr.sub(Expr.E, Expr.I);
+  const y = Expr.div(Expr.pow(Expr.E, Expr.E), denominator);
+  const result = evaluate(Expr.ONE, y);
+  assert.equal(result.displayText, "ln(e - i)");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
 });
