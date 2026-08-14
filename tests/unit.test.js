@@ -311,3 +311,20 @@ test("指数商对数规则不展开负分母", () => {
   assert.equal(Expr.render(result.expression), "ln(e^(e) / -2)");
   assert.equal(result.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"), false);
 });
+
+test("回归：e^(ln(i - ln(4))) 化简为 i - ln(4)", () => {
+  const argument = Expr.sub(Expr.I, Expr.ln(Expr.integer(4)));
+  const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(argument)));
+  assert.equal(Expr.render(result.expression), "i - ln(4)");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"));
+});
+
+test("非零判断识别虚部且不消去 ln(0)", () => {
+  const complex = Expr.sub(Expr.I, Expr.ln(Expr.integer(4)));
+  assert.equal(Rules.isProvablyNonZero(complex), true);
+
+  const zeroArgument = Expr.sub(Expr.ONE, Expr.ONE);
+  const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(zeroArgument)));
+  assert.equal(Expr.render(result.expression), "e^(ln(0))");
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"), false);
+});

@@ -179,6 +179,32 @@
     return false;
   }
 
+  function isProvablyPureImaginaryNonZero(expression) {
+    switch (expression.type) {
+      case TYPES.CONSTANT:
+        return expression.name === "i";
+      case TYPES.NEG:
+        return isProvablyPureImaginaryNonZero(expression.child);
+      case TYPES.MUL:
+        return (
+          (isProvablyPureImaginaryNonZero(expression.left) &&
+            isProvablyReal(expression.right) &&
+            isProvablyNonZero(expression.right)) ||
+          (isProvablyPureImaginaryNonZero(expression.right) &&
+            isProvablyReal(expression.left) &&
+            isProvablyNonZero(expression.left))
+        );
+      case TYPES.DIV:
+        return (
+          isProvablyPureImaginaryNonZero(expression.numerator) &&
+          isProvablyReal(expression.denominator) &&
+          isProvablyNonZero(expression.denominator)
+        );
+      default:
+        return false;
+    }
+  }
+
   function isProvablyNonZero(expression) {
     switch (expression.type) {
       case TYPES.INTEGER:
@@ -195,6 +221,15 @@
         return isConstant(expression.base, "e");
       case TYPES.LN:
         return isProvablyNonZero(expression.argument) && isProvablyNotOne(expression.argument);
+      case TYPES.ADD:
+      case TYPES.SUB: {
+        const bounds = realBounds(expression);
+        return Boolean(
+          (isProvablyPureImaginaryNonZero(expression.left) && isProvablyReal(expression.right)) ||
+          (isProvablyPureImaginaryNonZero(expression.right) && isProvablyReal(expression.left)) ||
+          (bounds && (bounds.lower > 0 || bounds.upper < 0))
+        );
+      }
       default: {
         const bounds = realBounds(expression);
         return Boolean(bounds && (bounds.lower > 0 || bounds.upper < 0));
@@ -426,5 +461,6 @@
     isProvablyReal,
     isProvablyPositive,
     isProvablyNonZero,
+    isProvablyPureImaginaryNonZero,
   };
 });
