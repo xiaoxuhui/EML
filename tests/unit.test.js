@@ -171,3 +171,23 @@ test("只有能证明为正数的对数参数才判定为实数", () => {
   assert.equal(Rules.isProvablyReal(Expr.ln(Expr.sub(Expr.E, Expr.ONE))), true);
   assert.equal(Rules.isProvablyReal(Expr.ln(Expr.integer(-1))), false);
 });
+
+test("回归：e^(ln(e - 1)) - e 化简为 -1", () => {
+  const expression = Expr.sub(
+    Expr.pow(Expr.E, Expr.ln(Expr.sub(Expr.E, Expr.ONE))),
+    Expr.E
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "-1");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_POSITIVE"));
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_RIGHT"));
+  assert.ok(result.steps.some((step) => step.ruleId === "NEG_INTEGER"));
+});
+
+test("e^(ln(a)) 不对非正实数参数进行消去", () => {
+  const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(Expr.integer(-1))));
+  assert.equal(Expr.render(result.expression), "-1");
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_POSITIVE"), false);
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_MINUS_ONE"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_IDENTITY"));
+});

@@ -17,6 +17,7 @@
   const rules = [
     { id: "EXP_ZERO", label: "e^0 = 1" },
     { id: "EXP_ONE", label: "e^1 = e" },
+    { id: "EXP_LN_POSITIVE", label: "e^(ln(a)) = a（a > 0）" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
     { id: "LN_ONE", label: "ln(1) = 0" },
     { id: "LN_E", label: "ln(e) = 1" },
@@ -27,6 +28,7 @@
     { id: "SUB_ZERO", label: "a - 0 = a" },
     { id: "SUB_SELF", label: "a - a = 0" },
     { id: "SUB_NESTED_LEFT", label: "a - (a - b) = b" },
+    { id: "SUB_NESTED_RIGHT", label: "(a - b) - a = -b" },
     { id: "MUL_ONE", label: "a × 1 = a" },
     { id: "MUL_ZERO", label: "a × 0 = 0" },
   ];
@@ -115,6 +117,9 @@
       if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
       if (isInteger(expression.exponent, 1)) return { expression: E, ruleId: "EXP_ONE" };
       if (isIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_IDENTITY" };
+      if (expression.exponent.type === TYPES.LN && isProvablyPositive(expression.exponent.argument)) {
+        return { expression: expression.exponent.argument, ruleId: "EXP_LN_POSITIVE" };
+      }
     }
 
     if (expression.type === TYPES.LN) {
@@ -144,6 +149,9 @@
       if (isSame(expression.left, expression.right)) return { expression: ZERO, ruleId: "SUB_SELF" };
       if (expression.right.type === TYPES.SUB && isSame(expression.left, expression.right.left)) {
         return { expression: expression.right.right, ruleId: "SUB_NESTED_LEFT" };
+      }
+      if (expression.left.type === TYPES.SUB && isSame(expression.left.left, expression.right)) {
+        return { expression: neg(expression.left.right), ruleId: "SUB_NESTED_RIGHT" };
       }
     }
 
