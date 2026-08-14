@@ -500,6 +500,22 @@ test("半对数指数不消去 ln(0)", () => {
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_HALF_LN"), false);
 });
 
+test("回归：2 / -i 化简为 2i", () => {
+  const result = Rules.simplify(Expr.div(Expr.integer(2), Expr.neg(Expr.I)));
+  assert.equal(Expr.render(result.expression), "2i");
+  assert.ok(result.steps.some((step) => step.ruleId === "DIV_NEG_I"));
+});
+
+test("除以 i 时保留正确的负号", () => {
+  const result = Rules.simplify(Expr.div(Expr.integer(2), Expr.I));
+  assert.equal(Expr.render(result.expression), "-2i");
+  assert.ok(result.steps.some((step) => step.ruleId === "DIV_I"));
+});
+
+test("i / -i 继续化简为 -1", () => {
+  assert.equal(Expr.render(Rules.simplify(Expr.div(Expr.I, Expr.neg(Expr.I))).expression), "-1");
+});
+
 test("复数乘法计算树中的负号显示无歧义", () => {
   const nestedProduct = Expr.neg(Expr.mul(Expr.I, Expr.mul(Expr.I, Expr.PI)));
   const doubleNegative = Expr.neg(Expr.neg(Expr.PI));

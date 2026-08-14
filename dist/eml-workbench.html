@@ -645,6 +645,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     { id: "I_TIMES_I_FACTOR", label: "i(ia) = -a" },
     { id: "DIV_ONE", label: "a / 1 = a" },
     { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
+    { id: "DIV_I", label: "a / i = -ai" },
+    { id: "DIV_NEG_I", label: "a / (-i) = ai" },
     { id: "INTEGER_DIV", label: "整除运算" },
   ];
 
@@ -1077,6 +1079,15 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       if (isInteger(expression.denominator, 1)) return { expression: expression.numerator, ruleId: "DIV_ONE" };
       if (isSame(expression.numerator, expression.denominator) && isProvablyNonZero(expression.numerator)) {
         return { expression: ONE, ruleId: "DIV_SELF" };
+      }
+      if (isConstant(expression.denominator, "i")) {
+        return { expression: neg(mul(expression.numerator, I)), ruleId: "DIV_I" };
+      }
+      if (
+        expression.denominator.type === TYPES.NEG &&
+        isConstant(expression.denominator.child, "i")
+      ) {
+        return { expression: mul(expression.numerator, I), ruleId: "DIV_NEG_I" };
       }
       if (
         expression.numerator.type === TYPES.INTEGER &&
