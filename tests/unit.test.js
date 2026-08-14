@@ -266,3 +266,17 @@ test("对数差不与非正分母合并", () => {
   const result = Rules.simplify(expression);
   assert.equal(result.steps.some((step) => step.ruleId === "LN_QUOTIENT_POSITIVE_DENOMINATOR"), false);
 });
+
+test("欧拉特殊角：e^(iπ / 2) 化简为 i", () => {
+  const exponent = Expr.div(Expr.mul(Expr.I, Expr.PI), Expr.integer(2));
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "i");
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_HALF_IDENTITY"));
+});
+
+test("欧拉特殊角：e^(-iπ / 2) 化简为 -i", () => {
+  const exponent = Expr.neg(Expr.div(Expr.mul(Expr.I, Expr.PI), Expr.integer(2)));
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "-i");
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_NEG_HALF_IDENTITY"));
+});

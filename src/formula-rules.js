@@ -20,6 +20,8 @@
     { id: "EXP_LN_NONZERO", label: "e^(ln(a)) = a（a ≠ 0）" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
     { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
+    { id: "EULER_HALF_IDENTITY", label: "e^(iπ / 2) = i" },
+    { id: "EULER_NEG_HALF_IDENTITY", label: "e^(-iπ / 2) = -i" },
     { id: "LN_ONE", label: "ln(1) = 0" },
     { id: "LN_E", label: "ln(e) = 1" },
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
@@ -59,6 +61,23 @@
 
   function isNegativeIpi(expression) {
     return expression.type === TYPES.NEG && isIpi(expression.child);
+  }
+
+  function isHalfIpi(expression) {
+    return (
+      expression.type === TYPES.DIV &&
+      isIpi(expression.numerator) &&
+      isInteger(expression.denominator, 2)
+    );
+  }
+
+  function isNegativeHalfIpi(expression) {
+    if (expression.type === TYPES.NEG) return isHalfIpi(expression.child);
+    return (
+      expression.type === TYPES.DIV &&
+      isNegativeIpi(expression.numerator) &&
+      isInteger(expression.denominator, 2)
+    );
   }
 
   function isProvablyReal(expression) {
@@ -188,6 +207,10 @@
       if (isIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_IDENTITY" };
       if (isNegativeIpi(expression.exponent)) {
         return { expression: integer(-1), ruleId: "EULER_NEG_IDENTITY" };
+      }
+      if (isHalfIpi(expression.exponent)) return { expression: I, ruleId: "EULER_HALF_IDENTITY" };
+      if (isNegativeHalfIpi(expression.exponent)) {
+        return { expression: neg(I), ruleId: "EULER_NEG_HALF_IDENTITY" };
       }
       if (expression.exponent.type === TYPES.LN && isProvablyNonZero(expression.exponent.argument)) {
         return { expression: expression.exponent.argument, ruleId: "EXP_LN_NONZERO" };
@@ -367,5 +390,15 @@
     return { expression: current, steps, limitReached: true };
   }
 
-  return { rules, simplify, isIpi, isNegativeIpi, isProvablyReal, isProvablyPositive, isProvablyNonZero };
+  return {
+    rules,
+    simplify,
+    isIpi,
+    isNegativeIpi,
+    isHalfIpi,
+    isNegativeHalfIpi,
+    isProvablyReal,
+    isProvablyPositive,
+    isProvablyNonZero,
+  };
 });
