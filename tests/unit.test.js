@@ -179,7 +179,7 @@ test("回归：e^(ln(e - 1)) - e 化简为 -1", () => {
   );
   const result = Rules.simplify(expression);
   assert.equal(Expr.render(result.expression), "-1");
-  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_POSITIVE"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"));
   assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_RIGHT"));
   assert.ok(result.steps.some((step) => step.ruleId === "NEG_INTEGER"));
 });
@@ -187,7 +187,7 @@ test("回归：e^(ln(e - 1)) - e 化简为 -1", () => {
 test("e^(ln(a)) 不对非正实数参数进行消去", () => {
   const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(Expr.integer(-1))));
   assert.equal(Expr.render(result.expression), "-1");
-  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_POSITIVE"), false);
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"), false);
   assert.ok(result.steps.some((step) => step.ruleId === "LN_MINUS_ONE"));
   assert.ok(result.steps.some((step) => step.ruleId === "EULER_IDENTITY"));
 });
@@ -244,4 +244,25 @@ test("基础代数组合规则审计", () => {
   for (const [input, expected] of cases) {
     assert.equal(Expr.render(Rules.simplify(input).expression), expected);
   }
+});
+
+test("回归：e^(ln(ln(iπ))) - ln(2) 化简为 ln(iπ / 2)", () => {
+  const x = Expr.ln(Expr.ln(Expr.mul(Expr.I, Expr.PI)));
+  const result = evaluate(x, Expr.integer(2));
+  assert.equal(result.displayText, "ln(iπ / 2)");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_LN_NONZERO"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_QUOTIENT_POSITIVE_DENOMINATOR"));
+});
+
+test("除法节点保持符号形式并支持近似计算", () => {
+  const expression = Expr.div(Expr.mul(Expr.I, Expr.PI), Expr.integer(2));
+  assert.equal(Expr.render(expression), "iπ / 2");
+  assert.equal(Expr.canonicalKey(expression), "div(mul(const:i,const:pi),int:2)");
+  assert.ok(Math.abs(Expr.approximate(expression).im - Math.PI / 2) < 1e-12);
+});
+
+test("对数差不与非正分母合并", () => {
+  const expression = Expr.sub(Expr.ln(Expr.I), Expr.ln(Expr.integer(-2)));
+  const result = Rules.simplify(expression);
+  assert.equal(result.steps.some((step) => step.ruleId === "LN_QUOTIENT_POSITIVE_DENOMINATOR"), false);
 });

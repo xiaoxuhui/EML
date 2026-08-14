@@ -10,20 +10,21 @@
 
   const {
     TYPES, ONE, ZERO, E, PI, I,
-    integer, neg, add, sub, mul, pow,
+    integer, neg, add, sub, mul, div, pow,
     canonicalKey, isSame, isInteger, isConstant, render,
   } = Expr;
 
   const rules = [
     { id: "EXP_ZERO", label: "e^0 = 1" },
     { id: "EXP_ONE", label: "e^1 = e" },
-    { id: "EXP_LN_POSITIVE", label: "e^(ln(a)) = a（a > 0）" },
+    { id: "EXP_LN_NONZERO", label: "e^(ln(a)) = a（a ≠ 0）" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
     { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
     { id: "LN_ONE", label: "ln(1) = 0" },
     { id: "LN_E", label: "ln(e) = 1" },
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
+    { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
     { id: "NEG_INTEGER", label: "负整数化简" },
     { id: "NEG_DOUBLE", label: "-(-a) = a" },
     { id: "INTEGER_ADD", label: "整数加法" },
@@ -43,6 +44,9 @@
     { id: "MUL_ZERO", label: "a × 0 = 0" },
     { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
     { id: "I_SQUARED", label: "i × i = -1" },
+    { id: "DIV_ONE", label: "a / 1 = a" },
+    { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
+    { id: "INTEGER_DIV", label: "整除运算" },
   ];
 
   function isIpi(expression) {
@@ -69,6 +73,8 @@
       case TYPES.SUB:
       case TYPES.MUL:
         return isProvablyReal(expression.left) && isProvablyReal(expression.right);
+      case TYPES.DIV:
+        return isProvablyReal(expression.numerator) && isProvablyReal(expression.denominator);
       case TYPES.POW:
         return isConstant(expression.base, "e") && isProvablyReal(expression.exponent);
       case TYPES.LN:
@@ -111,6 +117,18 @@
         ];
         return { lower: Math.min(...products), upper: Math.max(...products) };
       }
+      case TYPES.DIV: {
+        const numerator = realBounds(expression.numerator);
+        const denominator = realBounds(expression.denominator);
+        if (!numerator || !denominator || (denominator.lower <= 0 && denominator.upper >= 0)) return null;
+        const quotients = [
+          numerator.lower / denominator.lower,
+          numerator.lower / denominator.upper,
+          numerator.upper / denominator.lower,
+          numerator.upper / denominator.upper,
+        ];
+        return { lower: Math.min(...quotients), upper: Math.max(...quotients) };
+      }
       default:
         return null;
     }
@@ -128,6 +146,41 @@
     return Boolean(bounds && bounds.lower > 0);
   }
 
+  function isProvablyNotOne(expression) {
+    if (expression.type === TYPES.INTEGER) return expression.value !== 1;
+    if (expression.type === TYPES.CONSTANT) return true;
+    if (expression.type === TYPES.MUL) {
+      return (
+        (isConstant(expression.left, "i") && isProvablyNonZero(expression.right)) ||
+        (isConstant(expression.right, "i") && isProvablyNonZero(expression.left))
+      );
+    }
+    return false;
+  }
+
+  function isProvablyNonZero(expression) {
+    switch (expression.type) {
+      case TYPES.INTEGER:
+        return expression.value !== 0;
+      case TYPES.CONSTANT:
+        return true;
+      case TYPES.NEG:
+        return isProvablyNonZero(expression.child);
+      case TYPES.MUL:
+        return isProvablyNonZero(expression.left) && isProvablyNonZero(expression.right);
+      case TYPES.DIV:
+        return isProvablyNonZero(expression.numerator) && isProvablyNonZero(expression.denominator);
+      case TYPES.POW:
+        return isConstant(expression.base, "e");
+      case TYPES.LN:
+        return isProvablyNonZero(expression.argument) && isProvablyNotOne(expression.argument);
+      default: {
+        const bounds = realBounds(expression);
+        return Boolean(bounds && (bounds.lower > 0 || bounds.upper < 0));
+      }
+    }
+  }
+
   function rewriteNode(expression) {
     if (expression.type === TYPES.POW && isConstant(expression.base, "e")) {
       if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
@@ -136,8 +189,8 @@
       if (isNegativeIpi(expression.exponent)) {
         return { expression: integer(-1), ruleId: "EULER_NEG_IDENTITY" };
       }
-      if (expression.exponent.type === TYPES.LN && isProvablyPositive(expression.exponent.argument)) {
-        return { expression: expression.exponent.argument, ruleId: "EXP_LN_POSITIVE" };
+      if (expression.exponent.type === TYPES.LN && isProvablyNonZero(expression.exponent.argument)) {
+        return { expression: expression.exponent.argument, ruleId: "EXP_LN_NONZERO" };
       }
     }
 
@@ -179,6 +232,17 @@
     }
 
     if (expression.type === TYPES.SUB) {
+      if (
+        expression.left.type === TYPES.LN &&
+        expression.right.type === TYPES.LN &&
+        isProvablyNonZero(expression.left.argument) &&
+        isProvablyPositive(expression.right.argument)
+      ) {
+        return {
+          expression: Expr.ln(div(expression.left.argument, expression.right.argument)),
+          ruleId: "LN_QUOTIENT_POSITIVE_DENOMINATOR",
+        };
+      }
       if (expression.left.type === TYPES.INTEGER && expression.right.type === TYPES.INTEGER) {
         return { expression: integer(expression.left.value - expression.right.value), ruleId: "INTEGER_SUB" };
       }
@@ -227,6 +291,24 @@
       if (isInteger(expression.right, -1)) return { expression: neg(expression.left), ruleId: "MUL_NEG_ONE" };
     }
 
+    if (expression.type === TYPES.DIV) {
+      if (isInteger(expression.denominator, 1)) return { expression: expression.numerator, ruleId: "DIV_ONE" };
+      if (isSame(expression.numerator, expression.denominator) && isProvablyNonZero(expression.numerator)) {
+        return { expression: ONE, ruleId: "DIV_SELF" };
+      }
+      if (
+        expression.numerator.type === TYPES.INTEGER &&
+        expression.denominator.type === TYPES.INTEGER &&
+        expression.denominator.value !== 0 &&
+        expression.numerator.value % expression.denominator.value === 0
+      ) {
+        return {
+          expression: integer(expression.numerator.value / expression.denominator.value),
+          ruleId: "INTEGER_DIV",
+        };
+      }
+    }
+
     return null;
   }
 
@@ -241,6 +323,8 @@
         return sub(simplifyChild(expression.left), simplifyChild(expression.right));
       case TYPES.MUL:
         return mul(simplifyChild(expression.left), simplifyChild(expression.right));
+      case TYPES.DIV:
+        return div(simplifyChild(expression.numerator), simplifyChild(expression.denominator));
       case TYPES.POW:
         return pow(simplifyChild(expression.base), simplifyChild(expression.exponent));
       case TYPES.LN:
@@ -283,5 +367,5 @@
     return { expression: current, steps, limitReached: true };
   }
 
-  return { rules, simplify, isIpi, isNegativeIpi, isProvablyReal, isProvablyPositive };
+  return { rules, simplify, isIpi, isNegativeIpi, isProvablyReal, isProvablyPositive, isProvablyNonZero };
 });

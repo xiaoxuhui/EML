@@ -12,6 +12,7 @@
     ADD: "add",
     SUB: "sub",
     MUL: "mul",
+    DIV: "div",
     POW: "pow",
     LN: "ln",
     SQRT: "sqrt",
@@ -23,6 +24,7 @@
   const add = (left, right) => ({ type: TYPES.ADD, left, right });
   const sub = (left, right) => ({ type: TYPES.SUB, left, right });
   const mul = (left, right) => ({ type: TYPES.MUL, left, right });
+  const div = (numerator, denominator) => ({ type: TYPES.DIV, numerator, denominator });
   const pow = (base, exponent) => ({ type: TYPES.POW, base, exponent });
   const ln = (argument) => ({ type: TYPES.LN, argument });
   const sqrt = (argument) => ({ type: TYPES.SQRT, argument });
@@ -51,6 +53,8 @@
         const keys = [canonicalKey(expression.left), canonicalKey(expression.right)].sort();
         return `mul(${keys[0]},${keys[1]})`;
       }
+      case TYPES.DIV:
+        return `div(${canonicalKey(expression.numerator)},${canonicalKey(expression.denominator)})`;
       case TYPES.POW:
         return `pow(${canonicalKey(expression.base)},${canonicalKey(expression.exponent)})`;
       case TYPES.LN:
@@ -68,7 +72,7 @@
 
   function precedence(expression) {
     if ([TYPES.ADD, TYPES.SUB].includes(expression.type)) return 1;
-    if (expression.type === TYPES.MUL) return 2;
+    if ([TYPES.MUL, TYPES.DIV].includes(expression.type)) return 2;
     if (expression.type === TYPES.POW) return 3;
     return 4;
   }
@@ -101,6 +105,9 @@
         text = compact ? `${leftText}${rightText}` : `${leftText} × ${rightText}`;
         break;
       }
+      case TYPES.DIV:
+        text = `${render(expression.numerator, ownPrecedence)} / ${render(expression.denominator, ownPrecedence + 1)}`;
+        break;
       case TYPES.POW: {
         const baseText = render(expression.base, ownPrecedence);
         const exponentText = render(expression.exponent);
@@ -124,6 +131,14 @@
     const addComplex = (a, b) => make(a.re + b.re, a.im + b.im);
     const subComplex = (a, b) => make(a.re - b.re, a.im - b.im);
     const mulComplex = (a, b) => make(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re);
+    const divComplex = (a, b) => {
+      const denominator = b.re * b.re + b.im * b.im;
+      if (denominator === 0) return null;
+      return make(
+        (a.re * b.re + a.im * b.im) / denominator,
+        (a.im * b.re - a.re * b.im) / denominator
+      );
+    };
     const expComplex = (z) => {
       const scale = Math.exp(z.re);
       return make(scale * Math.cos(z.im), scale * Math.sin(z.im));
@@ -160,6 +175,11 @@
         const left = approximate(expression.left);
         const right = approximate(expression.right);
         return left && right ? mulComplex(left, right) : null;
+      }
+      case TYPES.DIV: {
+        const numerator = approximate(expression.numerator);
+        const denominator = approximate(expression.denominator);
+        return numerator && denominator ? divComplex(numerator, denominator) : null;
       }
       case TYPES.POW: {
         const base = approximate(expression.base);
@@ -204,6 +224,7 @@
     add,
     sub,
     mul,
+    div,
     pow,
     ln,
     sqrt,
