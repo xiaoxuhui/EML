@@ -19,21 +19,31 @@
     { id: "EXP_ONE", label: "e^1 = e" },
     { id: "EXP_LN_POSITIVE", label: "e^(ln(a)) = a（a > 0）" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
+    { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
     { id: "LN_ONE", label: "ln(1) = 0" },
     { id: "LN_E", label: "ln(e) = 1" },
     { id: "LN_EXP_REAL", label: "ln(e^a) = a（a 为实数）" },
+    { id: "LN_EXP_IPI_PRINCIPAL", label: "ln(e^(a ± iπ)) = a + iπ（a 为实数，主值）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "NEG_INTEGER", label: "负整数化简" },
+    { id: "NEG_DOUBLE", label: "-(-a) = a" },
     { id: "INTEGER_ADD", label: "整数加法" },
     { id: "INTEGER_SUB", label: "整数减法" },
     { id: "INTEGER_MUL", label: "整数乘法" },
     { id: "ADD_ZERO", label: "a + 0 = a" },
+    { id: "ADD_INVERSE", label: "a + (-a) = 0" },
+    { id: "ADD_SUB_CANCEL", label: "(a - b) + b = a" },
     { id: "SUB_ZERO", label: "a - 0 = a" },
     { id: "SUB_SELF", label: "a - a = 0" },
     { id: "SUB_NESTED_LEFT", label: "a - (a - b) = b" },
     { id: "SUB_NESTED_RIGHT", label: "(a - b) - a = -b" },
+    { id: "SUB_NEGATIVE", label: "a - (-b) = a + b" },
+    { id: "SUB_ADDED_LEFT", label: "a - (a + b) = -b" },
+    { id: "SUB_ADDED_CANCEL", label: "(a + b) - a = b" },
     { id: "MUL_ONE", label: "a × 1 = a" },
     { id: "MUL_ZERO", label: "a × 0 = 0" },
+    { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
+    { id: "I_SQUARED", label: "i × i = -1" },
   ];
 
   function isIpi(expression) {
@@ -42,6 +52,21 @@
       (isConstant(expression.left, "i") && isConstant(expression.right, "pi")) ||
       (isConstant(expression.left, "pi") && isConstant(expression.right, "i"))
     );
+  }
+
+  function isNegativeIpi(expression) {
+    return expression.type === TYPES.NEG && isIpi(expression.child);
+  }
+
+  function realPartWithIpi(expression) {
+    if (expression.type === TYPES.ADD) {
+      if (isIpi(expression.right) && isProvablyReal(expression.left)) return expression.left;
+      if (isIpi(expression.left) && isProvablyReal(expression.right)) return expression.right;
+    }
+    if (expression.type === TYPES.SUB && isIpi(expression.right) && isProvablyReal(expression.left)) {
+      return expression.left;
+    }
+    return null;
   }
 
   function isProvablyReal(expression) {
@@ -120,6 +145,9 @@
       if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
       if (isInteger(expression.exponent, 1)) return { expression: E, ruleId: "EXP_ONE" };
       if (isIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_IDENTITY" };
+      if (isNegativeIpi(expression.exponent)) {
+        return { expression: integer(-1), ruleId: "EULER_NEG_IDENTITY" };
+      }
       if (expression.exponent.type === TYPES.LN && isProvablyPositive(expression.exponent.argument)) {
         return { expression: expression.exponent.argument, ruleId: "EXP_LN_POSITIVE" };
       }
@@ -135,7 +163,17 @@
       ) {
         return { expression: expression.argument.exponent, ruleId: "LN_EXP_REAL" };
       }
+      if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) {
+        const realPart = realPartWithIpi(expression.argument.exponent);
+        if (realPart) {
+          return { expression: add(realPart, mul(I, PI)), ruleId: "LN_EXP_IPI_PRINCIPAL" };
+        }
+      }
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
+    }
+
+    if (expression.type === TYPES.NEG && expression.child.type === TYPES.NEG) {
+      return { expression: expression.child.child, ruleId: "NEG_DOUBLE" };
     }
 
     if (expression.type === TYPES.NEG && expression.child.type === TYPES.INTEGER) {
@@ -148,6 +186,18 @@
       }
       if (isInteger(expression.left, 0)) return { expression: expression.right, ruleId: "ADD_ZERO" };
       if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "ADD_ZERO" };
+      if (expression.left.type === TYPES.NEG && isSame(expression.left.child, expression.right)) {
+        return { expression: ZERO, ruleId: "ADD_INVERSE" };
+      }
+      if (expression.right.type === TYPES.NEG && isSame(expression.left, expression.right.child)) {
+        return { expression: ZERO, ruleId: "ADD_INVERSE" };
+      }
+      if (expression.left.type === TYPES.SUB && isSame(expression.left.right, expression.right)) {
+        return { expression: expression.left.left, ruleId: "ADD_SUB_CANCEL" };
+      }
+      if (expression.right.type === TYPES.SUB && isSame(expression.left, expression.right.right)) {
+        return { expression: expression.right.left, ruleId: "ADD_SUB_CANCEL" };
+      }
     }
 
     if (expression.type === TYPES.SUB) {
@@ -162,6 +212,25 @@
       if (expression.left.type === TYPES.SUB && isSame(expression.left.left, expression.right)) {
         return { expression: neg(expression.left.right), ruleId: "SUB_NESTED_RIGHT" };
       }
+      if (expression.right.type === TYPES.NEG) {
+        return { expression: add(expression.left, expression.right.child), ruleId: "SUB_NEGATIVE" };
+      }
+      if (expression.right.type === TYPES.ADD) {
+        if (isSame(expression.left, expression.right.left)) {
+          return { expression: neg(expression.right.right), ruleId: "SUB_ADDED_LEFT" };
+        }
+        if (isSame(expression.left, expression.right.right)) {
+          return { expression: neg(expression.right.left), ruleId: "SUB_ADDED_LEFT" };
+        }
+      }
+      if (expression.left.type === TYPES.ADD) {
+        if (isSame(expression.left.left, expression.right)) {
+          return { expression: expression.left.right, ruleId: "SUB_ADDED_CANCEL" };
+        }
+        if (isSame(expression.left.right, expression.right)) {
+          return { expression: expression.left.left, ruleId: "SUB_ADDED_CANCEL" };
+        }
+      }
     }
 
     if (expression.type === TYPES.MUL) {
@@ -171,8 +240,13 @@
       if (isInteger(expression.left, 0) || isInteger(expression.right, 0)) {
         return { expression: ZERO, ruleId: "MUL_ZERO" };
       }
+      if (isConstant(expression.left, "i") && isConstant(expression.right, "i")) {
+        return { expression: integer(-1), ruleId: "I_SQUARED" };
+      }
       if (isInteger(expression.left, 1)) return { expression: expression.right, ruleId: "MUL_ONE" };
       if (isInteger(expression.right, 1)) return { expression: expression.left, ruleId: "MUL_ONE" };
+      if (isInteger(expression.left, -1)) return { expression: neg(expression.right), ruleId: "MUL_NEG_ONE" };
+      if (isInteger(expression.right, -1)) return { expression: neg(expression.left), ruleId: "MUL_NEG_ONE" };
     }
 
     return null;
@@ -228,5 +302,5 @@
     return { expression: current, steps, limitReached: true };
   }
 
-  return { rules, simplify, isIpi, isProvablyReal, isProvablyPositive };
+  return { rules, simplify, isIpi, isNegativeIpi, isProvablyReal, isProvablyPositive };
 });

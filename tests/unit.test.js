@@ -211,3 +211,37 @@ test("整数加法和乘法直接计算", () => {
   assert.equal(Expr.render(sum.expression), "-1");
   assert.equal(Expr.render(product.expression), "-6");
 });
+
+test("回归：e - ln(e^(e - iπ)) 按复对数主值化简为 -iπ", () => {
+  const exponent = Expr.sub(Expr.E, Expr.mul(Expr.I, Expr.PI));
+  const result = evaluate(Expr.ONE, Expr.pow(Expr.E, exponent));
+  assert.equal(result.displayText, "-iπ");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_IPI_PRINCIPAL"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_ADDED_LEFT"));
+});
+
+test("复对数主值将 e + iπ 和 e - iπ 归到同一结果", () => {
+  const plus = Rules.simplify(Expr.ln(Expr.pow(Expr.E, Expr.add(Expr.E, Expr.mul(Expr.I, Expr.PI)))));
+  const minus = Rules.simplify(Expr.ln(Expr.pow(Expr.E, Expr.sub(Expr.E, Expr.mul(Expr.I, Expr.PI)))));
+  assert.equal(Expr.render(plus.expression), "e + iπ");
+  assert.equal(Expr.render(minus.expression), "e + iπ");
+});
+
+test("基础代数组合规则审计", () => {
+  const a = Expr.E;
+  const b = Expr.PI;
+  const cases = [
+    [Expr.neg(Expr.neg(a)), "e"],
+    [Expr.add(a, Expr.neg(a)), "0"],
+    [Expr.add(Expr.sub(a, b), b), "e"],
+    [Expr.sub(a, Expr.neg(b)), "e + π"],
+    [Expr.sub(a, Expr.add(a, b)), "-π"],
+    [Expr.sub(Expr.add(a, b), a), "π"],
+    [Expr.mul(Expr.integer(-1), a), "-e"],
+    [Expr.mul(Expr.I, Expr.I), "-1"],
+    [Expr.pow(Expr.E, Expr.neg(Expr.mul(Expr.I, Expr.PI))), "-1"],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(Expr.render(Rules.simplify(input).expression), expected);
+  }
+});

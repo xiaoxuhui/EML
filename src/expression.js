@@ -84,7 +84,7 @@
         text = String(expression.value);
         break;
       case TYPES.NEG:
-        text = `-${render(expression.child, ownPrecedence)}`;
+        text = `-${render(expression.child, 2)}`;
         break;
       case TYPES.ADD:
         text = `${render(expression.left, ownPrecedence)} + ${render(expression.right, ownPrecedence)}`;
