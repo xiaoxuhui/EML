@@ -21,6 +21,8 @@
     { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
     { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
     { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
+    { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
+    { id: "EXP_HALF", label: "e^(1 / 2) = √(e)" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
     { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
     { id: "EULER_HALF_IDENTITY", label: "e^(iπ / 2) = i" },
@@ -246,6 +248,13 @@
     if (expression.type === TYPES.POW && isConstant(expression.base, "e")) {
       if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
       if (isInteger(expression.exponent, 1)) return { expression: E, ruleId: "EXP_ONE" };
+      if (
+        expression.exponent.type === TYPES.DIV &&
+        isInteger(expression.exponent.numerator, 1) &&
+        isInteger(expression.exponent.denominator, 2)
+      ) {
+        return { expression: Expr.sqrt(E), ruleId: "EXP_HALF" };
+      }
       if (isIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_IDENTITY" };
       if (isNegativeIpi(expression.exponent)) {
         return { expression: integer(-1), ruleId: "EULER_NEG_IDENTITY" };
@@ -291,6 +300,22 @@
           ),
           ruleId: "EXP_ADD_LN",
         };
+      }
+      if (expression.exponent.type === TYPES.ADD) {
+        const logarithm = expression.exponent.left.type === TYPES.LN
+          ? expression.exponent.left
+          : expression.exponent.right.type === TYPES.LN
+            ? expression.exponent.right
+            : null;
+        if (logarithm && !isInteger(logarithm.argument, 0)) {
+          const other = logarithm === expression.exponent.left
+            ? expression.exponent.right
+            : expression.exponent.left;
+          return {
+            expression: mul(logarithm.argument, pow(E, other)),
+            ruleId: "EXP_SUM_LN_FACTOR",
+          };
+        }
       }
     }
 

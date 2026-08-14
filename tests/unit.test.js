@@ -457,6 +457,29 @@ test("对数和指数规则不消去明确的零参数", () => {
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_ADD_LN"), false);
 });
 
+test("回归：e^(1 / 2 + ln(2)) 化简为 2 × √(e)", () => {
+  const half = Expr.div(Expr.ONE, Expr.integer(2));
+  const expression = Expr.pow(Expr.E, Expr.add(half, Expr.ln(Expr.integer(2))));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "2 × √(e)");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_SUM_LN_FACTOR"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_HALF"));
+});
+
+test("指数和对数相加规则支持 ln 项在左侧", () => {
+  const half = Expr.div(Expr.ONE, Expr.integer(2));
+  const expression = Expr.pow(Expr.E, Expr.add(Expr.ln(Expr.integer(2)), half));
+  assert.equal(Expr.render(Rules.simplify(expression).expression), "2 × √(e)");
+});
+
+test("指数和对数相加规则不消去 ln(0)", () => {
+  const half = Expr.div(Expr.ONE, Expr.integer(2));
+  const expression = Expr.pow(Expr.E, Expr.add(half, Expr.ln(Expr.ZERO)));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "e^(1 / 2 + ln(0))");
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_SUM_LN_FACTOR"), false);
+});
+
 test("复数乘法计算树中的负号显示无歧义", () => {
   const nestedProduct = Expr.neg(Expr.mul(Expr.I, Expr.mul(Expr.I, Expr.PI)));
   const doubleNegative = Expr.neg(Expr.neg(Expr.PI));
