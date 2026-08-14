@@ -296,3 +296,18 @@ test("指数差规则不消去 ln(0)", () => {
   assert.equal(Expr.render(result.expression), "e^(1 - ln(0))");
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_SUB_LN"), false);
 });
+
+test("回归：e - ln(e^e / 2) 化简为 ln(2)", () => {
+  const y = Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(2));
+  const result = evaluate(Expr.ONE, y);
+  assert.equal(result.displayText, "ln(2)");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
+});
+
+test("指数商对数规则不展开负分母", () => {
+  const argument = Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(-2));
+  const result = Rules.simplify(Expr.ln(argument));
+  assert.equal(Expr.render(result.expression), "ln(e^(e) / -2)");
+  assert.equal(result.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"), false);
+});

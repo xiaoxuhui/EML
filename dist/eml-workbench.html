@@ -554,6 +554,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
+    { id: "LN_EXP_QUOTIENT", label: "ln(e^a / b) = a - ln(b)（b > 0）" },
     { id: "NEG_INTEGER", label: "负整数化简" },
     { id: "NEG_DOUBLE", label: "-(-a) = a" },
     { id: "INTEGER_ADD", label: "整数加法" },
@@ -759,6 +760,20 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       if (isConstant(expression.argument, "e")) return { expression: ONE, ruleId: "LN_E" };
       if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) {
         return { expression: expression.argument.exponent, ruleId: "LN_EXP_FORMAL" };
+      }
+      if (
+        expression.argument.type === TYPES.DIV &&
+        expression.argument.numerator.type === TYPES.POW &&
+        isConstant(expression.argument.numerator.base, "e") &&
+        isProvablyPositive(expression.argument.denominator)
+      ) {
+        return {
+          expression: sub(
+            expression.argument.numerator.exponent,
+            Expr.ln(expression.argument.denominator)
+          ),
+          ruleId: "LN_EXP_QUOTIENT",
+        };
       }
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
     }
