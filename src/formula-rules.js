@@ -60,6 +60,7 @@
     { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
     { id: "DIV_I", label: "a / i = -ai" },
     { id: "DIV_NEG_I", label: "a / (-i) = ai" },
+    { id: "EULER_SINE", label: "(e^(ia) - e^(-ia)) / (2i) = sin(a)" },
     { id: "INTEGER_DIV", label: "整除运算" },
   ];
 
@@ -109,6 +110,43 @@
       isInteger(factor.denominator, 2)
     ));
     return logarithm && half ? logarithm.argument : null;
+  }
+
+  function imaginaryCoefficient(expression) {
+    if (isConstant(expression, "i")) return ONE;
+    if (expression.type === TYPES.NEG) {
+      const coefficient = imaginaryCoefficient(expression.child);
+      return coefficient ? neg(coefficient) : null;
+    }
+    if (expression.type !== TYPES.MUL) return null;
+    if (isConstant(expression.left, "i")) return expression.right;
+    if (isConstant(expression.right, "i")) return expression.left;
+    return null;
+  }
+
+  function isTwoI(expression) {
+    return expression.type === TYPES.MUL && (
+      (isInteger(expression.left, 2) && isConstant(expression.right, "i")) ||
+      (isConstant(expression.left, "i") && isInteger(expression.right, 2))
+    );
+  }
+
+  function eulerSineArgument(expression) {
+    if (expression.type !== TYPES.DIV || !isTwoI(expression.denominator)) return null;
+    const numerator = expression.numerator;
+    if (numerator.type !== TYPES.SUB) return null;
+    const [left, right] = [numerator.left, numerator.right];
+    if (
+      left.type !== TYPES.POW || right.type !== TYPES.POW ||
+      !isConstant(left.base, "e") || !isConstant(right.base, "e")
+    ) {
+      return null;
+    }
+    const leftCoefficient = imaginaryCoefficient(left.exponent);
+    const rightCoefficient = imaginaryCoefficient(right.exponent);
+    return leftCoefficient && rightCoefficient && isSame(rightCoefficient, neg(leftCoefficient))
+      ? leftCoefficient
+      : null;
   }
 
   function isProvablyReal(expression) {
@@ -489,6 +527,8 @@
     }
 
     if (expression.type === TYPES.DIV) {
+      const sineArgument = eulerSineArgument(expression);
+      if (sineArgument) return { expression: Expr.sin(sineArgument), ruleId: "EULER_SINE" };
       if (isInteger(expression.denominator, 1)) return { expression: expression.numerator, ruleId: "DIV_ONE" };
       if (isSame(expression.numerator, expression.denominator) && isProvablyNonZero(expression.numerator)) {
         return { expression: ONE, ruleId: "DIV_SELF" };
@@ -540,6 +580,8 @@
         return Expr.ln(simplifyChild(expression.argument));
       case TYPES.SQRT:
         return Expr.sqrt(simplifyChild(expression.argument));
+      case TYPES.SIN:
+        return Expr.sin(simplifyChild(expression.argument));
       default:
         return expression;
     }
@@ -580,6 +622,7 @@
     isNegativeIpi,
     isHalfIpi,
     isNegativeHalfIpi,
+    eulerSineArgument,
     isProvablyReal,
     isProvablyPositive,
     isProvablyNonZero,

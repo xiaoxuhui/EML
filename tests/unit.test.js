@@ -516,6 +516,36 @@ test("i / -i 继续化简为 -1", () => {
   assert.equal(Expr.render(Rules.simplify(Expr.div(Expr.I, Expr.neg(Expr.I))).expression), "-1");
 });
 
+test("sin 表达式支持符号显示、近似计算和保存校验", () => {
+  const expression = Expr.sin(Expr.ONE);
+  assert.equal(Expr.render(expression), "sin(1)");
+  assert.ok(Math.abs(Expr.approximate(expression).re - Math.sin(1)) < 1e-12);
+  assert.equal(Expr.isValidExpression(expression), true);
+});
+
+test("回归：(e^i - e^(-i)) / (2i) 化简为 sin(1)", () => {
+  const numerator = Expr.sub(Expr.pow(Expr.E, Expr.I), Expr.pow(Expr.E, Expr.neg(Expr.I)));
+  const denominator = Expr.mul(Expr.integer(2), Expr.I);
+  const result = Rules.simplify(Expr.div(numerator, denominator));
+  assert.equal(Expr.render(result.expression), "sin(1)");
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_SINE"));
+});
+
+test("欧拉正弦公式支持一般符号参数", () => {
+  const positive = Expr.mul(Expr.I, Expr.E);
+  const numerator = Expr.sub(Expr.pow(Expr.E, positive), Expr.pow(Expr.E, Expr.neg(positive)));
+  const result = Rules.simplify(Expr.div(numerator, Expr.mul(Expr.I, Expr.integer(2))));
+  assert.equal(Expr.render(result.expression), "sin(e)");
+});
+
+test("欧拉正弦公式不匹配错误分母", () => {
+  const numerator = Expr.sub(Expr.pow(Expr.E, Expr.I), Expr.pow(Expr.E, Expr.neg(Expr.I)));
+  const expression = Expr.div(numerator, Expr.integer(2));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "(e^(i) - e^(-i)) / 2");
+  assert.equal(result.steps.some((step) => step.ruleId === "EULER_SINE"), false);
+});
+
 test("复数乘法计算树中的负号显示无歧义", () => {
   const nestedProduct = Expr.neg(Expr.mul(Expr.I, Expr.mul(Expr.I, Expr.PI)));
   const doubleNegative = Expr.neg(Expr.neg(Expr.PI));

@@ -16,6 +16,7 @@
     POW: "pow",
     LN: "ln",
     SQRT: "sqrt",
+    SIN: "sin",
   });
 
   const constant = (name) => ({ type: TYPES.CONSTANT, name });
@@ -28,6 +29,7 @@
   const pow = (base, exponent) => ({ type: TYPES.POW, base, exponent });
   const ln = (argument) => ({ type: TYPES.LN, argument });
   const sqrt = (argument) => ({ type: TYPES.SQRT, argument });
+  const sin = (argument) => ({ type: TYPES.SIN, argument });
 
   const ONE = integer(1);
   const ZERO = integer(0);
@@ -61,6 +63,8 @@
         return `ln(${canonicalKey(expression.argument)})`;
       case TYPES.SQRT:
         return `sqrt(${canonicalKey(expression.argument)})`;
+      case TYPES.SIN:
+        return `sin(${canonicalKey(expression.argument)})`;
       default:
         throw new Error(`未知表达式类型：${expression.type}`);
     }
@@ -130,6 +134,9 @@
         break;
       case TYPES.SQRT:
         text = `√(${render(expression.argument)})`;
+        break;
+      case TYPES.SIN:
+        text = `sin(${render(expression.argument)})`;
         break;
       default:
         throw new Error(`未知表达式类型：${expression.type}`);
@@ -213,6 +220,12 @@
           Math.sign(argument.im || 1) * Math.sqrt(Math.max(0, (magnitude - argument.re) / 2))
         );
       }
+      case TYPES.SIN: {
+        const argument = approximate(expression.argument);
+        return argument
+          ? make(Math.sin(argument.re) * Math.cosh(argument.im), Math.cos(argument.re) * Math.sinh(argument.im))
+          : null;
+      }
       default:
         return null;
     }
@@ -239,6 +252,7 @@
     pow,
     ln,
     sqrt,
+    sin,
     ONE,
     ZERO,
     E,
