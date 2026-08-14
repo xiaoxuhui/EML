@@ -480,6 +480,26 @@ test("指数和对数相加规则不消去 ln(0)", () => {
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_SUM_LN_FACTOR"), false);
 });
 
+test("回归：e^(ln(2) × 1 / 2) 化简为 √(2)", () => {
+  const exponent = Expr.div(Expr.mul(Expr.ln(Expr.integer(2)), Expr.ONE), Expr.integer(2));
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "√(2)");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_HALF_LN"));
+});
+
+test("半对数指数支持乘以结构化二分之一", () => {
+  const half = Expr.div(Expr.ONE, Expr.integer(2));
+  const exponent = Expr.mul(Expr.ln(Expr.integer(2)), half);
+  assert.equal(Expr.render(Rules.simplify(Expr.pow(Expr.E, exponent)).expression), "√(2)");
+});
+
+test("半对数指数不消去 ln(0)", () => {
+  const exponent = Expr.div(Expr.ln(Expr.ZERO), Expr.integer(2));
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "e^(ln(0) / 2)");
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_HALF_LN"), false);
+});
+
 test("复数乘法计算树中的负号显示无歧义", () => {
   const nestedProduct = Expr.neg(Expr.mul(Expr.I, Expr.mul(Expr.I, Expr.PI)));
   const doubleNegative = Expr.neg(Expr.neg(Expr.PI));

@@ -23,6 +23,7 @@
     { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
     { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
     { id: "EXP_HALF", label: "e^(1 / 2) = √(e)" },
+    { id: "EXP_HALF_LN", label: "e^(ln(a) / 2) = √(a)（形式化规则）" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
     { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
     { id: "EULER_HALF_IDENTITY", label: "e^(iπ / 2) = i" },
@@ -87,6 +88,25 @@
       isNegativeIpi(expression.numerator) &&
       isInteger(expression.denominator, 2)
     );
+  }
+
+  function halfLogarithmArgument(expression) {
+    if (
+      expression.type === TYPES.DIV &&
+      expression.numerator.type === TYPES.LN &&
+      isInteger(expression.denominator, 2)
+    ) {
+      return expression.numerator.argument;
+    }
+    if (expression.type !== TYPES.MUL) return null;
+    const factors = [expression.left, expression.right];
+    const logarithm = factors.find((factor) => factor.type === TYPES.LN);
+    const half = factors.find((factor) => (
+      factor.type === TYPES.DIV &&
+      isInteger(factor.numerator, 1) &&
+      isInteger(factor.denominator, 2)
+    ));
+    return logarithm && half ? logarithm.argument : null;
   }
 
   function isProvablyReal(expression) {
@@ -248,6 +268,10 @@
     if (expression.type === TYPES.POW && isConstant(expression.base, "e")) {
       if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
       if (isInteger(expression.exponent, 1)) return { expression: E, ruleId: "EXP_ONE" };
+      const halfLogArgument = halfLogarithmArgument(expression.exponent);
+      if (halfLogArgument && !isInteger(halfLogArgument, 0)) {
+        return { expression: Expr.sqrt(halfLogArgument), ruleId: "EXP_HALF_LN" };
+      }
       if (
         expression.exponent.type === TYPES.DIV &&
         isInteger(expression.exponent.numerator, 1) &&
