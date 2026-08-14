@@ -22,8 +22,7 @@
     { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
     { id: "LN_ONE", label: "ln(1) = 0" },
     { id: "LN_E", label: "ln(e) = 1" },
-    { id: "LN_EXP_REAL", label: "ln(e^a) = a（a 为实数）" },
-    { id: "LN_EXP_IPI_PRINCIPAL", label: "ln(e^(a ± iπ)) = a + iπ（a 为实数，主值）" },
+    { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "NEG_INTEGER", label: "负整数化简" },
     { id: "NEG_DOUBLE", label: "-(-a) = a" },
@@ -56,17 +55,6 @@
 
   function isNegativeIpi(expression) {
     return expression.type === TYPES.NEG && isIpi(expression.child);
-  }
-
-  function realPartWithIpi(expression) {
-    if (expression.type === TYPES.ADD) {
-      if (isIpi(expression.right) && isProvablyReal(expression.left)) return expression.left;
-      if (isIpi(expression.left) && isProvablyReal(expression.right)) return expression.right;
-    }
-    if (expression.type === TYPES.SUB && isIpi(expression.right) && isProvablyReal(expression.left)) {
-      return expression.left;
-    }
-    return null;
   }
 
   function isProvablyReal(expression) {
@@ -156,18 +144,8 @@
     if (expression.type === TYPES.LN) {
       if (isInteger(expression.argument, 1)) return { expression: ZERO, ruleId: "LN_ONE" };
       if (isConstant(expression.argument, "e")) return { expression: ONE, ruleId: "LN_E" };
-      if (
-        expression.argument.type === TYPES.POW &&
-        isConstant(expression.argument.base, "e") &&
-        isProvablyReal(expression.argument.exponent)
-      ) {
-        return { expression: expression.argument.exponent, ruleId: "LN_EXP_REAL" };
-      }
       if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) {
-        const realPart = realPartWithIpi(expression.argument.exponent);
-        if (realPart) {
-          return { expression: add(realPart, mul(I, PI)), ruleId: "LN_EXP_IPI_PRINCIPAL" };
-        }
+        return { expression: expression.argument.exponent, ruleId: "LN_EXP_FORMAL" };
       }
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
     }
@@ -266,6 +244,9 @@
       case TYPES.POW:
         return pow(simplifyChild(expression.base), simplifyChild(expression.exponent));
       case TYPES.LN:
+        if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) {
+          return expression;
+        }
         return Expr.ln(simplifyChild(expression.argument));
       case TYPES.SQRT:
         return Expr.sqrt(simplifyChild(expression.argument));

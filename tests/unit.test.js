@@ -148,21 +148,21 @@ test("无效导入不会通过校验", () => {
 test("回归：e - ln(e^(e)) 继续化简为 0", () => {
   const result = evaluate(Expr.ONE, Expr.pow(Expr.E, Expr.E));
   assert.equal(result.displayText, "0");
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_REAL"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_FORMAL"));
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_SELF"));
 });
 
-test("ln(e^a) 不对无法证明为实数的指数进行化简", () => {
+test("形式化反函数规则支持复指数", () => {
   const result = Rules.simplify(Expr.ln(Expr.pow(Expr.E, Expr.I)));
-  assert.equal(Expr.render(result.expression), "ln(e^(i))");
-  assert.equal(result.steps.some((step) => step.ruleId === "LN_EXP_REAL"), false);
+  assert.equal(Expr.render(result.expression), "i");
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_EXP_FORMAL"));
 });
 
 test("回归：嵌套实数对数指数继续化简", () => {
   const exponent = Expr.sub(Expr.E, Expr.ln(Expr.sub(Expr.E, Expr.ONE)));
   const result = evaluate(Expr.ONE, Expr.pow(Expr.E, exponent));
   assert.equal(result.displayText, "ln(e - 1)");
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_REAL"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_FORMAL"));
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
 });
 
@@ -201,7 +201,7 @@ test("回归：1 - -1 化简为 2", () => {
 test("EML(0, e^(-1)) 完成对数和整数运算", () => {
   const result = evaluate(Expr.ZERO, Expr.pow(Expr.E, Expr.integer(-1)));
   assert.equal(result.displayText, "2");
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_REAL"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_FORMAL"));
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "INTEGER_SUB"));
 });
 
@@ -212,19 +212,19 @@ test("整数加法和乘法直接计算", () => {
   assert.equal(Expr.render(product.expression), "-6");
 });
 
-test("回归：e - ln(e^(e - iπ)) 按复对数主值化简为 -iπ", () => {
+test("回归：e - ln(e^(e - iπ)) 按形式化反函数规则化简为 iπ", () => {
   const exponent = Expr.sub(Expr.E, Expr.mul(Expr.I, Expr.PI));
   const result = evaluate(Expr.ONE, Expr.pow(Expr.E, exponent));
-  assert.equal(result.displayText, "-iπ");
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_IPI_PRINCIPAL"));
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_ADDED_LEFT"));
+  assert.equal(result.displayText, "iπ");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_FORMAL"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
 });
 
-test("复对数主值将 e + iπ 和 e - iπ 归到同一结果", () => {
+test("形式化反函数保留复指数中的正负号", () => {
   const plus = Rules.simplify(Expr.ln(Expr.pow(Expr.E, Expr.add(Expr.E, Expr.mul(Expr.I, Expr.PI)))));
   const minus = Rules.simplify(Expr.ln(Expr.pow(Expr.E, Expr.sub(Expr.E, Expr.mul(Expr.I, Expr.PI)))));
   assert.equal(Expr.render(plus.expression), "e + iπ");
-  assert.equal(Expr.render(minus.expression), "e + iπ");
+  assert.equal(Expr.render(minus.expression), "e - iπ");
 });
 
 test("基础代数组合规则审计", () => {
