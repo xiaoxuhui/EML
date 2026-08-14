@@ -328,3 +328,17 @@ test("非零判断识别虚部且不消去 ln(0)", () => {
   assert.equal(Expr.render(result.expression), "e^(ln(0))");
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_NONZERO"), false);
 });
+
+test("回归：e^(-ln(4)) 化简为 1 / 4", () => {
+  const expression = Expr.pow(Expr.E, Expr.neg(Expr.ln(Expr.integer(4))));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "1 / 4");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_NEG_LN"));
+});
+
+test("负对数指数规则不消去 ln(0)", () => {
+  const expression = Expr.pow(Expr.E, Expr.neg(Expr.ln(Expr.ZERO)));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "e^(-ln(0))");
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_NEG_LN"), false);
+});

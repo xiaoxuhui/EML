@@ -19,6 +19,7 @@
     { id: "EXP_ONE", label: "e^1 = e" },
     { id: "EXP_LN_NONZERO", label: "e^(ln(a)) = a（a ≠ 0）" },
     { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
+    { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
     { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
     { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
     { id: "EULER_HALF_IDENTITY", label: "e^(iπ / 2) = i" },
@@ -260,6 +261,16 @@
         return {
           expression: div(pow(E, expression.exponent.left), expression.exponent.right.argument),
           ruleId: "EXP_SUB_LN",
+        };
+      }
+      if (
+        expression.exponent.type === TYPES.NEG &&
+        expression.exponent.child.type === TYPES.LN &&
+        isProvablyNonZero(expression.exponent.child.argument)
+      ) {
+        return {
+          expression: div(ONE, expression.exponent.child.argument),
+          ruleId: "EXP_NEG_LN",
         };
       }
     }
