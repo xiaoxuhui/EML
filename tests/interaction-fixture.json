@@ -1,0 +1,67 @@
+{
+  "app": "EML Workbench",
+  "savedAt": "2026-08-14T00:00:00.000Z",
+  "schemaVersion": 2,
+  "values": {
+    "value:int%3A1": {
+      "id": "value:int%3A1",
+      "canonicalExpression": { "type": "integer", "value": 1 },
+      "canonicalKey": "int:1",
+      "displayText": "1",
+      "protected": true,
+      "derivationIds": [],
+      "createdAt": "1970-01-01T00:00:00.000Z"
+    },
+    "value:const%3Ae": {
+      "id": "value:const%3Ae",
+      "canonicalExpression": { "type": "constant", "name": "e" },
+      "canonicalKey": "const:e",
+      "displayText": "e",
+      "protected": false,
+      "derivationIds": [],
+      "createdAt": "2026-08-14T00:00:00.000Z"
+    },
+    "value:const%3Api": {
+      "id": "value:const%3Api",
+      "canonicalExpression": { "type": "constant", "name": "pi" },
+      "canonicalKey": "const:pi",
+      "displayText": "π",
+      "protected": false,
+      "derivationIds": [],
+      "createdAt": "2026-08-14T00:00:00.000Z"
+    },
+    "value:mul(const%3Ai%2Cconst%3Api)": {
+      "id": "value:mul(const%3Ai%2Cconst%3Api)",
+      "canonicalExpression": {
+        "type": "mul",
+        "left": { "type": "constant", "name": "i" },
+        "right": { "type": "constant", "name": "pi" }
+      },
+      "canonicalKey": "mul(const:i,const:pi)",
+      "displayText": "iπ",
+      "protected": false,
+      "derivationIds": [],
+      "createdAt": "2026-08-14T00:00:00.000Z"
+    },
+    "value:int%3A0": {
+      "id": "value:int%3A0",
+      "canonicalExpression": { "type": "integer", "value": 0 },
+      "canonicalKey": "int:0",
+      "displayText": "0",
+      "protected": false,
+      "derivationIds": [],
+      "createdAt": "2026-08-14T00:00:00.000Z"
+    }
+  },
+  "derivations": {},
+  "valueOrder": [
+    "value:int%3A1",
+    "value:const%3Ae",
+    "value:const%3Api",
+    "value:mul(const%3Ai%2Cconst%3Api)",
+    "value:int%3A0"
+  ],
+  "inputXId": null,
+  "inputYId": null,
+  "selectedValueId": null
+}

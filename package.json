@@ -1,0 +1,9 @@
+{
+  "name": "eml-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/unit.test.js",
+    "build": "node scripts/build.mjs"
+  }
+}

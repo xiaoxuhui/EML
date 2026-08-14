@@ -1,0 +1,1335 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>EML 计算台</title>
+  <style>
+:root {
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #18212f;
+  background: #eef2f4;
+  font-synthesis: none;
+  letter-spacing: 0;
+  --paper: #ffffff;
+  --line: #cbd4d9;
+  --line-strong: #8d9aa2;
+  --muted: #66737c;
+  --accent: #087e8b;
+  --accent-dark: #075f68;
+  --accent-soft: #e5f4f5;
+  --result: #166534;
+  --result-soft: #edf8ef;
+  --danger: #a63d40;
+  --danger-soft: #fff1f1;
+  --warm: #9a5b13;
+  --warm-soft: #fff7e8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #eef2f4;
+}
+
+button, input { font: inherit; letter-spacing: 0; }
+
+button {
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: #24313b;
+  min-height: 38px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-dark); }
+button:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: #24313b;
+  background: var(--paper);
+  text-decoration: none;
+}
+.button-link:hover { border-color: var(--accent); color: var(--accent-dark); }
+.button-link:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+
+.app-shell {
+  width: min(1080px, calc(100% - 32px));
+  margin: 24px auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.eyebrow { margin: 0 0 2px; color: var(--muted); font-size: 12px; }
+h1 { margin: 0; font-size: 30px; line-height: 1; }
+h2 { margin: 0; font-size: 17px; }
+h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
+
+.file-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.danger-button { color: var(--danger); border-color: #d8a7a8; }
+.danger-button:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+
+.calculator, .values-section, .details-section { padding: 22px 24px; }
+.calculator, .values-section { border-bottom: 1px solid var(--line); }
+
+.formula-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 64px;
+  margin-top: 12px;
+  overflow-x: auto;
+  padding: 2px 1px 6px;
+}
+
+.formula-name, .formula-punctuation {
+  flex: 0 0 auto;
+  font-family: Cambria, "Times New Roman", serif;
+  font-size: 25px;
+}
+
+.input-slot, .result-slot {
+  flex: 0 0 auto;
+  width: 132px;
+  min-height: 48px;
+  border: 2px dashed var(--line-strong);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 10px;
+  background: #f8fafb;
+  font-family: Cambria, "Times New Roman", serif;
+  font-size: 21px;
+  overflow-wrap: anywhere;
+}
+
+.input-slot.filled { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: #064e55; }
+.input-slot.drag-over { box-shadow: 0 0 0 4px rgba(8, 126, 139, 0.18); }
+
+.result-slot {
+  width: min(310px, 34vw);
+  border-style: solid;
+  border-color: #8cc89c;
+  background: var(--result-soft);
+  color: var(--result);
+  font-weight: 700;
+}
+
+.result-slot.error { border-color: #d8a7a8; background: var(--danger-soft); color: var(--danger); }
+.primary-button { background: var(--accent); border-color: var(--accent); color: white; }
+.primary-button:hover:not(:disabled) { background: var(--accent-dark); color: white; border-color: var(--accent-dark); }
+.add-button { flex: 0 0 auto; min-width: 76px; }
+
+.direct-preview { min-height: 22px; color: var(--muted); font-family: Cambria, "Times New Roman", serif; overflow-wrap: anywhere; }
+.notice { min-height: 22px; margin-top: 4px; color: var(--warm); font-size: 13px; }
+.notice.error { color: var(--danger); }
+
+.section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.section-heading > div { display: flex; align-items: baseline; gap: 10px; }
+.count { color: var(--muted); font-size: 12px; }
+
+.value-list { display: flex; align-items: stretch; flex-wrap: wrap; gap: 10px; min-height: 48px; }
+.value-item { position: relative; display: inline-flex; max-width: 100%; }
+.value-button {
+  min-width: 64px;
+  max-width: min(440px, 76vw);
+  min-height: 44px;
+  padding: 8px 13px;
+  background: #f7f9fa;
+  font-family: Cambria, "Times New Roman", serif;
+  font-size: 18px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.value-button:active { cursor: grabbing; }
+.value-item:not(.protected) .value-button { border-radius: 6px 0 0 6px; }
+.value-item.protected .value-button { padding-right: 13px; border-color: #d1ad67; background: var(--warm-soft); }
+.value-item.selected .value-button { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.delete-button {
+  position: static;
+  width: 34px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  background: #f7f9fa;
+  color: var(--danger);
+  font-size: 21px;
+  line-height: 1;
+}
+
+.details-empty { color: var(--muted); padding: 10px 0; }
+.selected-value-line { margin-bottom: 18px; font-size: 16px; }
+.selected-value-line strong { font-family: Cambria, "Times New Roman", serif; font-size: 22px; }
+.detail-block + .detail-block { margin-top: 22px; }
+.formula-entry { padding: 9px 0; border-bottom: 1px solid #e3e8eb; font-family: Cambria, "Times New Roman", serif; overflow-wrap: anywhere; }
+.formula-entry:last-child { border-bottom: 0; }
+.empty-formulas { color: var(--muted); }
+
+.tree-derivation { border-left: 3px solid #a9cdd1; padding: 4px 0 4px 14px; margin: 8px 0; }
+.tree-derivation summary { cursor: pointer; font-family: Cambria, "Times New Roman", serif; font-weight: 700; overflow-wrap: anywhere; }
+.tree-inputs, .rewrite-steps { margin: 9px 0 6px; padding-left: 22px; }
+.tree-inputs li, .rewrite-steps li { margin: 6px 0; overflow-wrap: anywhere; }
+.tree-value { color: #34434d; }
+.tree-label { font-family: Cambria, "Times New Roman", serif; font-weight: 600; }
+.rewrite-steps { color: var(--muted); font-size: 13px; }
+
+@media (max-width: 720px) {
+  .app-shell { width: 100%; margin: 0; border-left: 0; border-right: 0; }
+  .app-header { align-items: flex-start; flex-direction: column; padding: 18px 16px; }
+  .file-actions { justify-content: flex-start; }
+  .calculator, .values-section, .details-section { padding: 20px 16px; }
+  .formula-line { gap: 7px; flex-wrap: wrap; overflow-x: visible; }
+  .formula-name, .formula-punctuation { font-size: 21px; }
+  .input-slot { width: 96px; }
+  .result-slot { width: min(240px, 100%); }
+  .value-button { max-width: calc(100vw - 32px); }
+}
+
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">符号计算工作台</p>
+        <h1>EML</h1>
+      </div>
+      <div class="file-actions" aria-label="文件操作">
+        <a href="#" id="saveButton" class="button-link" download="eml-workbench-v2.json">保存列表</a>
+        <button type="button" id="importButton">导入列表</button>
+        <button type="button" id="clearButton" class="danger-button">清空非初始值</button>
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
+      </div>
+    </header>
+
+    <section class="calculator" aria-labelledby="calculatorTitle">
+      <h2 id="calculatorTitle">计算</h2>
+      <div class="formula-line">
+        <span class="formula-name">EML(</span>
+        <button type="button" class="input-slot" id="slotX" data-slot="x" aria-label="x 输入位置">x</button>
+        <span class="formula-punctuation">,</span>
+        <button type="button" class="input-slot" id="slotY" data-slot="y" aria-label="y 输入位置">y</button>
+        <span class="formula-punctuation">) =</span>
+        <output class="result-slot" id="resultOutput" aria-live="polite">?</output>
+        <button type="button" class="primary-button add-button" id="addButton" disabled>添加</button>
+      </div>
+      <div class="direct-preview" id="directPreview">等待 x、y</div>
+      <div class="notice" id="notice" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="values-section" aria-labelledby="valuesTitle">
+      <div class="section-heading">
+        <div>
+          <h2 id="valuesTitle">数值栏</h2>
+          <span class="count" id="valueCount">1 个数值</span>
+        </div>
+      </div>
+      <div class="value-list" id="valueList"></div>
+    </section>
+
+    <section class="details-section" aria-labelledby="detailsTitle">
+      <div class="section-heading">
+        <h2 id="detailsTitle">公式详情</h2>
+      </div>
+      <div class="details-empty" id="detailsEmpty">选择一个数值查看公式来源</div>
+      <div class="details-content" id="detailsContent" hidden>
+        <div class="selected-value-line">当前数值：<strong id="selectedValue"></strong></div>
+        <div class="detail-block">
+          <h3>直接公式</h3>
+          <div id="directFormulaList"></div>
+        </div>
+        <div class="detail-block">
+          <h3>完整计算树</h3>
+          <div id="calculationTree"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+/* expression.js */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLExpression = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const TYPES = Object.freeze({
+    CONSTANT: "constant",
+    INTEGER: "integer",
+    NEG: "neg",
+    ADD: "add",
+    SUB: "sub",
+    MUL: "mul",
+    POW: "pow",
+    LN: "ln",
+    SQRT: "sqrt",
+  });
+
+  const constant = (name) => ({ type: TYPES.CONSTANT, name });
+  const integer = (value) => ({ type: TYPES.INTEGER, value: Number(value) });
+  const neg = (child) => ({ type: TYPES.NEG, child });
+  const add = (left, right) => ({ type: TYPES.ADD, left, right });
+  const sub = (left, right) => ({ type: TYPES.SUB, left, right });
+  const mul = (left, right) => ({ type: TYPES.MUL, left, right });
+  const pow = (base, exponent) => ({ type: TYPES.POW, base, exponent });
+  const ln = (argument) => ({ type: TYPES.LN, argument });
+  const sqrt = (argument) => ({ type: TYPES.SQRT, argument });
+
+  const ONE = integer(1);
+  const ZERO = integer(0);
+  const E = constant("e");
+  const PI = constant("pi");
+  const I = constant("i");
+
+  function canonicalKey(expression) {
+    switch (expression.type) {
+      case TYPES.CONSTANT:
+        return `const:${expression.name}`;
+      case TYPES.INTEGER:
+        return `int:${expression.value}`;
+      case TYPES.NEG:
+        return `neg(${canonicalKey(expression.child)})`;
+      case TYPES.ADD: {
+        const keys = [canonicalKey(expression.left), canonicalKey(expression.right)].sort();
+        return `add(${keys[0]},${keys[1]})`;
+      }
+      case TYPES.SUB:
+        return `sub(${canonicalKey(expression.left)},${canonicalKey(expression.right)})`;
+      case TYPES.MUL: {
+        const keys = [canonicalKey(expression.left), canonicalKey(expression.right)].sort();
+        return `mul(${keys[0]},${keys[1]})`;
+      }
+      case TYPES.POW:
+        return `pow(${canonicalKey(expression.base)},${canonicalKey(expression.exponent)})`;
+      case TYPES.LN:
+        return `ln(${canonicalKey(expression.argument)})`;
+      case TYPES.SQRT:
+        return `sqrt(${canonicalKey(expression.argument)})`;
+      default:
+        throw new Error(`未知表达式类型：${expression.type}`);
+    }
+  }
+
+  const isSame = (left, right) => canonicalKey(left) === canonicalKey(right);
+  const isInteger = (expression, value) => expression.type === TYPES.INTEGER && expression.value === value;
+  const isConstant = (expression, name) => expression.type === TYPES.CONSTANT && expression.name === name;
+
+  function precedence(expression) {
+    if ([TYPES.ADD, TYPES.SUB].includes(expression.type)) return 1;
+    if (expression.type === TYPES.MUL) return 2;
+    if (expression.type === TYPES.POW) return 3;
+    return 4;
+  }
+
+  function render(expression, parentPrecedence = 0) {
+    const ownPrecedence = precedence(expression);
+    let text;
+    switch (expression.type) {
+      case TYPES.CONSTANT:
+        text = expression.name === "pi" ? "π" : expression.name;
+        break;
+      case TYPES.INTEGER:
+        text = String(expression.value);
+        break;
+      case TYPES.NEG:
+        text = `-${render(expression.child, ownPrecedence)}`;
+        break;
+      case TYPES.ADD:
+        text = `${render(expression.left, ownPrecedence)} + ${render(expression.right, ownPrecedence)}`;
+        break;
+      case TYPES.SUB:
+        text = `${render(expression.left, ownPrecedence)} - ${render(expression.right, ownPrecedence + 1)}`;
+        break;
+      case TYPES.MUL: {
+        const leftText = render(expression.left, ownPrecedence);
+        const rightText = render(expression.right, ownPrecedence);
+        const compact = [expression.left, expression.right].every((part) =>
+          [TYPES.CONSTANT, TYPES.INTEGER].includes(part.type)
+        );
+        text = compact ? `${leftText}${rightText}` : `${leftText} × ${rightText}`;
+        break;
+      }
+      case TYPES.POW: {
+        const baseText = render(expression.base, ownPrecedence);
+        const exponentText = render(expression.exponent);
+        text = `${baseText}^(${exponentText})`;
+        break;
+      }
+      case TYPES.LN:
+        text = `ln(${render(expression.argument)})`;
+        break;
+      case TYPES.SQRT:
+        text = `√(${render(expression.argument)})`;
+        break;
+      default:
+        throw new Error(`未知表达式类型：${expression.type}`);
+    }
+    return ownPrecedence < parentPrecedence ? `(${text})` : text;
+  }
+
+  function approximate(expression) {
+    const make = (re, im = 0) => ({ re, im });
+    const addComplex = (a, b) => make(a.re + b.re, a.im + b.im);
+    const subComplex = (a, b) => make(a.re - b.re, a.im - b.im);
+    const mulComplex = (a, b) => make(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re);
+    const expComplex = (z) => {
+      const scale = Math.exp(z.re);
+      return make(scale * Math.cos(z.im), scale * Math.sin(z.im));
+    };
+    const logComplex = (z) => {
+      const magnitudeSquared = z.re * z.re + z.im * z.im;
+      if (magnitudeSquared === 0) return null;
+      return make(0.5 * Math.log(magnitudeSquared), Math.atan2(z.im, z.re));
+    };
+
+    switch (expression.type) {
+      case TYPES.CONSTANT:
+        if (expression.name === "e") return make(Math.E);
+        if (expression.name === "pi") return make(Math.PI);
+        if (expression.name === "i") return make(0, 1);
+        return null;
+      case TYPES.INTEGER:
+        return make(expression.value);
+      case TYPES.NEG: {
+        const value = approximate(expression.child);
+        return value ? make(-value.re, -value.im) : null;
+      }
+      case TYPES.ADD: {
+        const left = approximate(expression.left);
+        const right = approximate(expression.right);
+        return left && right ? addComplex(left, right) : null;
+      }
+      case TYPES.SUB: {
+        const left = approximate(expression.left);
+        const right = approximate(expression.right);
+        return left && right ? subComplex(left, right) : null;
+      }
+      case TYPES.MUL: {
+        const left = approximate(expression.left);
+        const right = approximate(expression.right);
+        return left && right ? mulComplex(left, right) : null;
+      }
+      case TYPES.POW: {
+        const base = approximate(expression.base);
+        const exponent = approximate(expression.exponent);
+        if (!base || !exponent) return null;
+        if (Math.abs(base.re - Math.E) < 1e-12 && Math.abs(base.im) < 1e-12) return expComplex(exponent);
+        const logBase = logComplex(base);
+        return logBase ? expComplex(mulComplex(exponent, logBase)) : null;
+      }
+      case TYPES.LN: {
+        const argument = approximate(expression.argument);
+        return argument ? logComplex(argument) : null;
+      }
+      case TYPES.SQRT: {
+        const argument = approximate(expression.argument);
+        if (!argument) return null;
+        const magnitude = Math.hypot(argument.re, argument.im);
+        return make(
+          Math.sqrt((magnitude + argument.re) / 2),
+          Math.sign(argument.im || 1) * Math.sqrt(Math.max(0, (magnitude - argument.re) / 2))
+        );
+      }
+      default:
+        return null;
+    }
+  }
+
+  function isValidExpression(expression) {
+    try {
+      canonicalKey(expression);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return {
+    TYPES,
+    constant,
+    integer,
+    neg,
+    add,
+    sub,
+    mul,
+    pow,
+    ln,
+    sqrt,
+    ONE,
+    ZERO,
+    E,
+    PI,
+    I,
+    canonicalKey,
+    isSame,
+    isInteger,
+    isConstant,
+    render,
+    approximate,
+    isValidExpression,
+  };
+});
+
+
+/* formula-rules.js */
+(function (root, factory) {
+  const expression = typeof module === "object" && module.exports
+    ? require("./expression.js")
+    : root.EMLExpression;
+  const api = factory(expression);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLFormulaRules = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr) {
+  "use strict";
+
+  const {
+    TYPES, ONE, ZERO, E, PI, I,
+    integer, neg, add, sub, mul, pow,
+    canonicalKey, isSame, isInteger, isConstant, render,
+  } = Expr;
+
+  const rules = [
+    { id: "EXP_ZERO", label: "e^0 = 1" },
+    { id: "EXP_ONE", label: "e^1 = e" },
+    { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
+    { id: "LN_ONE", label: "ln(1) = 0" },
+    { id: "LN_E", label: "ln(e) = 1" },
+    { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
+    { id: "NEG_INTEGER", label: "负整数化简" },
+    { id: "ADD_ZERO", label: "a + 0 = a" },
+    { id: "SUB_ZERO", label: "a - 0 = a" },
+    { id: "SUB_SELF", label: "a - a = 0" },
+    { id: "MUL_ONE", label: "a × 1 = a" },
+    { id: "MUL_ZERO", label: "a × 0 = 0" },
+  ];
+
+  function isIpi(expression) {
+    if (expression.type !== TYPES.MUL) return false;
+    return (
+      (isConstant(expression.left, "i") && isConstant(expression.right, "pi")) ||
+      (isConstant(expression.left, "pi") && isConstant(expression.right, "i"))
+    );
+  }
+
+  function rewriteNode(expression) {
+    if (expression.type === TYPES.POW && isConstant(expression.base, "e")) {
+      if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
+      if (isInteger(expression.exponent, 1)) return { expression: E, ruleId: "EXP_ONE" };
+      if (isIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_IDENTITY" };
+    }
+
+    if (expression.type === TYPES.LN) {
+      if (isInteger(expression.argument, 1)) return { expression: ZERO, ruleId: "LN_ONE" };
+      if (isConstant(expression.argument, "e")) return { expression: ONE, ruleId: "LN_E" };
+      if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
+    }
+
+    if (expression.type === TYPES.NEG && expression.child.type === TYPES.INTEGER) {
+      return { expression: integer(-expression.child.value), ruleId: "NEG_INTEGER" };
+    }
+
+    if (expression.type === TYPES.ADD) {
+      if (isInteger(expression.left, 0)) return { expression: expression.right, ruleId: "ADD_ZERO" };
+      if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "ADD_ZERO" };
+    }
+
+    if (expression.type === TYPES.SUB) {
+      if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "SUB_ZERO" };
+      if (isSame(expression.left, expression.right)) return { expression: ZERO, ruleId: "SUB_SELF" };
+    }
+
+    if (expression.type === TYPES.MUL) {
+      if (isInteger(expression.left, 0) || isInteger(expression.right, 0)) {
+        return { expression: ZERO, ruleId: "MUL_ZERO" };
+      }
+      if (isInteger(expression.left, 1)) return { expression: expression.right, ruleId: "MUL_ONE" };
+      if (isInteger(expression.right, 1)) return { expression: expression.left, ruleId: "MUL_ONE" };
+    }
+
+    return null;
+  }
+
+  function rewriteChildren(expression, steps) {
+    const simplifyChild = (child) => simplify(child, steps).expression;
+    switch (expression.type) {
+      case TYPES.NEG:
+        return neg(simplifyChild(expression.child));
+      case TYPES.ADD:
+        return add(simplifyChild(expression.left), simplifyChild(expression.right));
+      case TYPES.SUB:
+        return sub(simplifyChild(expression.left), simplifyChild(expression.right));
+      case TYPES.MUL:
+        return mul(simplifyChild(expression.left), simplifyChild(expression.right));
+      case TYPES.POW:
+        return pow(simplifyChild(expression.base), simplifyChild(expression.exponent));
+      case TYPES.LN:
+        return Expr.ln(simplifyChild(expression.argument));
+      case TYPES.SQRT:
+        return Expr.sqrt(simplifyChild(expression.argument));
+      default:
+        return expression;
+    }
+  }
+
+  function simplify(expression, sharedSteps) {
+    const steps = sharedSteps || [];
+    let current = expression;
+    let iterations = 0;
+
+    while (iterations < 50) {
+      iterations += 1;
+      const withChildren = rewriteChildren(current, steps);
+      const rewritten = rewriteNode(withChildren);
+      const next = rewritten ? rewritten.expression : withChildren;
+
+      if (rewritten) {
+        steps.push({
+          ruleId: rewritten.ruleId,
+          before: render(withChildren),
+          after: render(next),
+        });
+      }
+
+      if (canonicalKey(next) === canonicalKey(current)) {
+        return { expression: next, steps };
+      }
+      current = next;
+    }
+
+    return { expression: current, steps, limitReached: true };
+  }
+
+  return { rules, simplify, isIpi };
+});
+
+
+/* evaluator.js */
+(function (root, factory) {
+  const expression = typeof module === "object" && module.exports
+    ? require("./expression.js")
+    : root.EMLExpression;
+  const formulaRules = typeof module === "object" && module.exports
+    ? require("./formula-rules.js")
+    : root.EMLFormulaRules;
+  const api = factory(expression, formulaRules);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLEvaluator = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, FormulaRules) {
+  "use strict";
+
+  function evaluateEML(xExpression, yExpression) {
+    const yApproximation = Expr.approximate(yExpression);
+    if (yApproximation && Math.abs(yApproximation.re) < 1e-12 && Math.abs(yApproximation.im) < 1e-12) {
+      return { ok: false, error: "ln(0) 未定义" };
+    }
+
+    const rawExpression = Expr.sub(Expr.pow(Expr.E, xExpression), Expr.ln(yExpression));
+    const simplified = FormulaRules.simplify(rawExpression);
+    return {
+      ok: true,
+      xExpression,
+      yExpression,
+      rawExpression,
+      resultExpression: simplified.expression,
+      canonicalKey: Expr.canonicalKey(simplified.expression),
+      displayText: Expr.render(simplified.expression),
+      directFormula: `EML(${Expr.render(xExpression)}, ${Expr.render(yExpression)}) = ${Expr.render(simplified.expression)}`,
+      rewriteSteps: simplified.steps,
+      limitReached: Boolean(simplified.limitReached),
+      approximation: Expr.approximate(simplified.expression),
+    };
+  }
+
+  return { evaluateEML };
+});
+
+
+/* value-store.js */
+(function (root, factory) {
+  const expression = typeof module === "object" && module.exports
+    ? require("./expression.js")
+    : root.EMLExpression;
+  const api = factory(expression);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLValueStore = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr) {
+  "use strict";
+
+  const encodeId = (prefix, key) => `${prefix}:${encodeURIComponent(key)}`;
+  const valueIdFor = (canonicalKey) => encodeId("value", canonicalKey);
+  const derivationIdFor = (formulaKey) => encodeId("derivation", formulaKey);
+  const initialValueId = valueIdFor(Expr.canonicalKey(Expr.ONE));
+
+  function createInitialValue() {
+    return {
+      id: initialValueId,
+      canonicalExpression: Expr.ONE,
+      canonicalKey: Expr.canonicalKey(Expr.ONE),
+      displayText: "1",
+      protected: true,
+      derivationIds: [],
+      createdAt: new Date(0).toISOString(),
+    };
+  }
+
+  function createInitialState() {
+    const initialValue = createInitialValue();
+    return {
+      schemaVersion: 2,
+      values: { [initialValue.id]: initialValue },
+      derivations: {},
+      valueOrder: [initialValue.id],
+      inputXId: null,
+      inputYId: null,
+      selectedValueId: null,
+    };
+  }
+
+  const cloneState = (state) => JSON.parse(JSON.stringify(state));
+
+  function formulaKeyFor(evaluation) {
+    return `eml(${Expr.canonicalKey(evaluation.xExpression)},${Expr.canonicalKey(evaluation.yExpression)})->${evaluation.canonicalKey}`;
+  }
+
+  function addEvaluation(state, evaluation, xValueId, yValueId) {
+    if (!evaluation || !evaluation.ok) return { state, status: "invalid" };
+    if (!state.values[xValueId] || !state.values[yValueId]) return { state, status: "missing-input" };
+
+    const next = cloneState(state);
+    const resultValueId = valueIdFor(evaluation.canonicalKey);
+    const formulaKey = formulaKeyFor(evaluation);
+    const derivationId = derivationIdFor(formulaKey);
+    const existingValue = next.values[resultValueId];
+    const existingDerivation = next.derivations[derivationId];
+
+    if (!existingValue) {
+      next.values[resultValueId] = {
+        id: resultValueId,
+        canonicalExpression: evaluation.resultExpression,
+        canonicalKey: evaluation.canonicalKey,
+        displayText: evaluation.displayText,
+        protected: evaluation.canonicalKey === Expr.canonicalKey(Expr.ONE),
+        derivationIds: [],
+        createdAt: new Date().toISOString(),
+      };
+      next.valueOrder.push(resultValueId);
+    }
+
+    if (!existingDerivation) {
+      next.derivations[derivationId] = {
+        id: derivationId,
+        formulaKey,
+        operation: "EML",
+        xValueId,
+        yValueId,
+        rawExpression: evaluation.rawExpression,
+        resultValueId,
+        directFormula: evaluation.directFormula,
+        rewriteSteps: evaluation.rewriteSteps,
+        createdAt: new Date().toISOString(),
+      };
+      next.values[resultValueId].derivationIds.push(derivationId);
+    }
+
+    next.selectedValueId = resultValueId;
+    return {
+      state: next,
+      resultValueId,
+      status: existingDerivation ? "duplicate-formula" : existingValue ? "added-formula" : "added-value",
+    };
+  }
+
+  function isReferenced(state, valueId) {
+    return Object.values(state.derivations).some(
+      (derivation) => derivation.xValueId === valueId || derivation.yValueId === valueId
+    );
+  }
+
+  function deleteValue(state, valueId) {
+    const value = state.values[valueId];
+    if (!value) return { state, status: "missing" };
+    if (value.protected || valueId === initialValueId) return { state, status: "protected" };
+    if (isReferenced(state, valueId)) return { state, status: "referenced" };
+
+    const next = cloneState(state);
+    for (const derivationId of value.derivationIds) delete next.derivations[derivationId];
+    delete next.values[valueId];
+    next.valueOrder = next.valueOrder.filter((id) => id !== valueId);
+    if (next.inputXId === valueId) next.inputXId = null;
+    if (next.inputYId === valueId) next.inputYId = null;
+    if (next.selectedValueId === valueId) next.selectedValueId = null;
+    return { state: next, status: "deleted" };
+  }
+
+  function clearNonInitial() {
+    return createInitialState();
+  }
+
+  function selectValue(state, valueId) {
+    if (!state.values[valueId]) return state;
+    const next = cloneState(state);
+    next.selectedValueId = valueId;
+    return next;
+  }
+
+  function setInput(state, inputName, valueId) {
+    if (!state.values[valueId] || !["x", "y"].includes(inputName)) return state;
+    const next = cloneState(state);
+    if (inputName === "x") next.inputXId = valueId;
+    if (inputName === "y") next.inputYId = valueId;
+    return next;
+  }
+
+  function buildValueTree(state, valueId, visited) {
+    const value = state.values[valueId];
+    if (!value) return { type: "missing", valueId };
+    const path = new Set(visited || []);
+    if (path.has(valueId)) return { type: "cycle", valueId, label: value.displayText };
+    path.add(valueId);
+
+    return {
+      type: "value",
+      valueId,
+      label: value.displayText,
+      initial: value.protected && value.derivationIds.length === 0,
+      derivations: value.derivationIds.map((derivationId) => {
+        const derivation = state.derivations[derivationId];
+        if (!derivation) return { type: "missing-derivation", derivationId };
+        return {
+          type: "derivation",
+          derivationId,
+          directFormula: derivation.directFormula,
+          rewriteSteps: derivation.rewriteSteps,
+          x: buildValueTree(state, derivation.xValueId, path),
+          y: buildValueTree(state, derivation.yValueId, path),
+        };
+      }),
+    };
+  }
+
+  function getDetails(state, valueId) {
+    const value = state.values[valueId];
+    if (!value) return null;
+    return {
+      value,
+      directFormulas: value.derivationIds
+        .map((id) => state.derivations[id])
+        .filter(Boolean)
+        .map((derivation) => derivation.directFormula),
+      tree: buildValueTree(state, valueId),
+    };
+  }
+
+  return {
+    initialValueId,
+    valueIdFor,
+    formulaKeyFor,
+    createInitialState,
+    addEvaluation,
+    deleteValue,
+    clearNonInitial,
+    selectValue,
+    setInput,
+    isReferenced,
+    buildValueTree,
+    getDetails,
+  };
+});
+
+
+/* persistence.js */
+(function (root, factory) {
+  const expression = typeof module === "object" && module.exports
+    ? require("./expression.js")
+    : root.EMLExpression;
+  const valueStore = typeof module === "object" && module.exports
+    ? require("./value-store.js")
+    : root.EMLValueStore;
+  const api = factory(expression, valueStore);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLPersistence = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, ValueStore) {
+  "use strict";
+
+  const CACHE_KEY = "eml_workbench_v2";
+
+  function validateState(candidate) {
+    if (!candidate || candidate.schemaVersion !== 2) return { ok: false, error: "不支持的数据版本" };
+    if (!candidate.values || typeof candidate.values !== "object") return { ok: false, error: "缺少数值数据" };
+    if (!candidate.derivations || typeof candidate.derivations !== "object") return { ok: false, error: "缺少公式数据" };
+    if (!Array.isArray(candidate.valueOrder)) return { ok: false, error: "数值顺序无效" };
+
+    for (const valueId of candidate.valueOrder) {
+      const value = candidate.values[valueId];
+      if (!value || value.id !== valueId || !Expr.isValidExpression(value.canonicalExpression)) {
+        return { ok: false, error: "存在无效数值" };
+      }
+      if (Expr.canonicalKey(value.canonicalExpression) !== value.canonicalKey) {
+        return { ok: false, error: "数值标识不一致" };
+      }
+      if (!Array.isArray(value.derivationIds)) return { ok: false, error: "公式索引无效" };
+    }
+
+    for (const [derivationId, derivation] of Object.entries(candidate.derivations)) {
+      if (!derivation || derivation.id !== derivationId) return { ok: false, error: "存在无效公式" };
+      if (!candidate.values[derivation.xValueId] || !candidate.values[derivation.yValueId] || !candidate.values[derivation.resultValueId]) {
+        return { ok: false, error: "公式引用了不存在的数值" };
+      }
+      if (!candidate.values[derivation.resultValueId].derivationIds.includes(derivationId)) {
+        return { ok: false, error: "公式与结果索引不一致" };
+      }
+    }
+
+    const initial = candidate.values[ValueStore.initialValueId];
+    if (!initial || !initial.protected) return { ok: false, error: "缺少受保护的初始值 1" };
+
+    const allowedSelection = (id) => id === null || Boolean(candidate.values[id]);
+    if (!allowedSelection(candidate.inputXId) || !allowedSelection(candidate.inputYId) || !allowedSelection(candidate.selectedValueId)) {
+      return { ok: false, error: "选择状态引用了不存在的数值" };
+    }
+
+    for (const valueId of candidate.valueOrder) {
+      const tree = ValueStore.buildValueTree(candidate, valueId);
+      if (JSON.stringify(tree).includes('"type":"cycle"')) return { ok: false, error: "公式来源存在循环引用" };
+    }
+
+    return { ok: true, state: JSON.parse(JSON.stringify(candidate)) };
+  }
+
+  function serialize(state) {
+    return JSON.stringify({
+      app: "EML Workbench",
+      savedAt: new Date().toISOString(),
+      ...state,
+      schemaVersion: 2,
+    }, null, 2);
+  }
+
+  function deserialize(text) {
+    try {
+      return validateState(JSON.parse(text));
+    } catch {
+      return { ok: false, error: "文件不是有效的 JSON" };
+    }
+  }
+
+  function saveToCache(storage, state) {
+    storage.setItem(CACHE_KEY, serialize(state));
+  }
+
+  function loadFromCache(storage) {
+    const text = storage.getItem(CACHE_KEY);
+    if (!text) return { ok: false, error: "没有缓存" };
+    return deserialize(text);
+  }
+
+  return { CACHE_KEY, validateState, serialize, deserialize, saveToCache, loadFromCache };
+});
+
+
+/* app.js */
+(function (root) {
+  "use strict";
+
+  const Expr = root.EMLExpression;
+  const Evaluator = root.EMLEvaluator;
+  const Store = root.EMLValueStore;
+  const Persistence = root.EMLPersistence;
+
+  const elements = {
+    slotX: document.getElementById("slotX"),
+    slotY: document.getElementById("slotY"),
+    result: document.getElementById("resultOutput"),
+    add: document.getElementById("addButton"),
+    directPreview: document.getElementById("directPreview"),
+    notice: document.getElementById("notice"),
+    valueList: document.getElementById("valueList"),
+    valueCount: document.getElementById("valueCount"),
+    save: document.getElementById("saveButton"),
+    import: document.getElementById("importButton"),
+    importFile: document.getElementById("importFile"),
+    clear: document.getElementById("clearButton"),
+    detailsEmpty: document.getElementById("detailsEmpty"),
+    detailsContent: document.getElementById("detailsContent"),
+    selectedValue: document.getElementById("selectedValue"),
+    directFormulaList: document.getElementById("directFormulaList"),
+    calculationTree: document.getElementById("calculationTree"),
+  };
+
+  let state = restoreState();
+  let preview = null;
+  let pointerDrag = null;
+  let suppressValueClick = false;
+
+  function restoreState() {
+    try {
+      const restored = Persistence.loadFromCache(localStorage);
+      if (restored.ok) return restored.state;
+    } catch {
+      // A disabled cache should not prevent the calculator from starting.
+    }
+    return Store.createInitialState();
+  }
+
+  function persistState() {
+    try {
+      Persistence.saveToCache(localStorage, state);
+      return true;
+    } catch {
+      showNotice("无法写入浏览器缓存，请使用“保存列表”备份。", true);
+      return false;
+    }
+  }
+
+  function showNotice(message, isError = false) {
+    elements.notice.textContent = message || "";
+    elements.notice.classList.toggle("error", isError);
+  }
+
+  function currentValue(valueId) {
+    return valueId ? state.values[valueId] : null;
+  }
+
+  function recomputePreview() {
+    const x = currentValue(state.inputXId);
+    const y = currentValue(state.inputYId);
+    preview = x && y ? Evaluator.evaluateEML(x.canonicalExpression, y.canonicalExpression) : null;
+  }
+
+  function renderSlot(element, value, placeholder) {
+    element.textContent = value ? value.displayText : placeholder;
+    element.classList.toggle("filled", Boolean(value));
+    element.title = value ? value.displayText : `${placeholder} 输入位置`;
+  }
+
+  function renderCalculator() {
+    renderSlot(elements.slotX, currentValue(state.inputXId), "x");
+    renderSlot(elements.slotY, currentValue(state.inputYId), "y");
+    elements.result.classList.toggle("error", Boolean(preview && !preview.ok));
+
+    if (!preview) {
+      elements.result.textContent = "?";
+      elements.directPreview.textContent = "等待 x、y";
+      elements.add.disabled = true;
+      return;
+    }
+
+    if (!preview.ok) {
+      elements.result.textContent = "未定义";
+      elements.directPreview.textContent = preview.error;
+      elements.add.disabled = true;
+      return;
+    }
+
+    elements.result.textContent = preview.displayText;
+    elements.directPreview.textContent = preview.directFormula;
+    elements.add.disabled = false;
+  }
+
+  function makeDeleteButton(valueId) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "delete-button";
+    button.textContent = "×";
+    button.title = "删除该数值";
+    button.setAttribute("aria-label", "删除该数值");
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const result = Store.deleteValue(state, valueId);
+      if (result.status === "referenced") {
+        showNotice("该数值已被其他公式引用，不能删除。", true);
+        return;
+      }
+      if (result.status !== "deleted") return;
+      state = result.state;
+      recomputePreview();
+      persistState();
+      showNotice("已删除数值。", false);
+      render();
+    });
+    return button;
+  }
+
+  function renderValues() {
+    elements.valueList.replaceChildren();
+    elements.valueCount.textContent = `${state.valueOrder.length} 个数值`;
+
+    for (const valueId of state.valueOrder) {
+      const value = state.values[valueId];
+      if (!value) continue;
+      const item = document.createElement("div");
+      item.className = "value-item";
+      item.classList.toggle("protected", Boolean(value.protected));
+      item.classList.toggle("selected", state.selectedValueId === valueId);
+      item.dataset.valueId = valueId;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "value-button";
+      button.textContent = value.displayText;
+      button.title = value.protected ? `${value.displayText}（初始值，不可删除）` : value.displayText;
+      button.draggable = false;
+      button.setAttribute("aria-pressed", String(state.selectedValueId === valueId));
+      button.addEventListener("click", () => {
+        if (suppressValueClick) {
+          suppressValueClick = false;
+          return;
+        }
+        state = Store.selectValue(state, valueId);
+        persistState();
+        showNotice("");
+        render();
+      });
+      button.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        pointerDrag = { valueId, startX: event.clientX, startY: event.clientY, active: false, pointerId: event.pointerId };
+        button.setPointerCapture(event.pointerId);
+      });
+      button.addEventListener("pointermove", (event) => {
+        if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+        const distance = Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY);
+        if (distance > 6) pointerDrag.active = true;
+        if (!pointerDrag.active) return;
+        event.preventDefault();
+        document.querySelectorAll(".input-slot").forEach((slot) => slot.classList.remove("drag-over"));
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot");
+        if (target) target.classList.add("drag-over");
+      });
+      button.addEventListener("pointerup", (event) => {
+        if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+        const drag = pointerDrag;
+        pointerDrag = null;
+        document.querySelectorAll(".input-slot").forEach((slot) => slot.classList.remove("drag-over"));
+        if (!drag.active) return;
+        suppressValueClick = true;
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot");
+        if (target) assignInput(target.dataset.slot, drag.valueId);
+      });
+
+      item.appendChild(button);
+      if (!value.protected) item.appendChild(makeDeleteButton(valueId));
+      elements.valueList.appendChild(item);
+    }
+  }
+
+  function appendValueBranch(container, label, node) {
+    const item = document.createElement("li");
+    item.className = "tree-value";
+    const heading = document.createElement("span");
+    heading.className = "tree-label";
+    heading.textContent = `${label}: ${node.label || "未知"}${node.initial ? "（初始值）" : ""}`;
+    item.appendChild(heading);
+
+    if (node.type === "cycle") {
+      item.append("（检测到循环，已停止展开）");
+    } else if (node.derivations && node.derivations.length) {
+      node.derivations.forEach((derivation) => item.appendChild(renderDerivation(derivation)));
+    }
+    container.appendChild(item);
+  }
+
+  function renderDerivation(derivation) {
+    const details = document.createElement("details");
+    details.className = "tree-derivation";
+    details.open = true;
+    const summary = document.createElement("summary");
+    summary.textContent = derivation.directFormula || "公式数据缺失";
+    details.appendChild(summary);
+
+    if (derivation.rewriteSteps && derivation.rewriteSteps.length) {
+      const steps = document.createElement("ol");
+      steps.className = "rewrite-steps";
+      for (const step of derivation.rewriteSteps) {
+        const item = document.createElement("li");
+        item.textContent = `${step.before} → ${step.after}`;
+        steps.appendChild(item);
+      }
+      details.appendChild(steps);
+    }
+
+    const inputs = document.createElement("ul");
+    inputs.className = "tree-inputs";
+    appendValueBranch(inputs, "x", derivation.x);
+    appendValueBranch(inputs, "y", derivation.y);
+    details.appendChild(inputs);
+    return details;
+  }
+
+  function renderDetails() {
+    const details = Store.getDetails(state, state.selectedValueId);
+    elements.detailsEmpty.hidden = Boolean(details);
+    elements.detailsContent.hidden = !details;
+    elements.directFormulaList.replaceChildren();
+    elements.calculationTree.replaceChildren();
+    if (!details) return;
+
+    elements.selectedValue.textContent = details.value.displayText;
+    if (details.directFormulas.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-formulas";
+      empty.textContent = details.value.protected ? "初始值，没有上游公式。" : "没有公式来源。";
+      elements.directFormulaList.appendChild(empty);
+    } else {
+      for (const formula of details.directFormulas) {
+        const row = document.createElement("div");
+        row.className = "formula-entry";
+        row.textContent = formula;
+        elements.directFormulaList.appendChild(row);
+      }
+    }
+
+    if (details.tree.derivations.length === 0) {
+      const root = document.createElement("div");
+      root.className = "empty-formulas";
+      root.textContent = `${details.value.displayText}（初始值）`;
+      elements.calculationTree.appendChild(root);
+    } else {
+      details.tree.derivations.forEach((derivation) => {
+        elements.calculationTree.appendChild(renderDerivation(derivation));
+      });
+    }
+  }
+
+  function render() {
+    renderCalculator();
+    renderValues();
+    renderDetails();
+  }
+
+  function assignInput(slotName, valueId) {
+    if (!state.values[valueId]) {
+      showNotice("拖入的数值无效。", true);
+      return;
+    }
+    state = Store.setInput(state, slotName, valueId);
+    recomputePreview();
+    persistState();
+    showNotice("");
+    render();
+  }
+
+  function bindSlot(element, slotName) {
+    element.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      element.classList.add("drag-over");
+    });
+    element.addEventListener("dragleave", () => element.classList.remove("drag-over"));
+    element.addEventListener("drop", (event) => {
+      event.preventDefault();
+      element.classList.remove("drag-over");
+      const valueId = event.dataTransfer.getData("application/x-eml-value") || event.dataTransfer.getData("text/plain");
+      assignInput(slotName, valueId);
+    });
+    element.addEventListener("click", () => {
+      if (!state.selectedValueId) {
+        showNotice("请先选择数值栏中的一个数值。", true);
+        return;
+      }
+      assignInput(slotName, state.selectedValueId);
+    });
+  }
+
+  bindSlot(elements.slotX, "x");
+  bindSlot(elements.slotY, "y");
+
+  elements.add.addEventListener("click", () => {
+    if (!preview || !preview.ok || !state.inputXId || !state.inputYId) return;
+    const result = Store.addEvaluation(state, preview, state.inputXId, state.inputYId);
+    state = result.state;
+    persistState();
+    const messages = {
+      "added-value": "已添加新数值和公式来源。",
+      "added-formula": "数值已存在，已添加新的公式来源。",
+      "duplicate-formula": "该数值和公式已经存在。",
+    };
+    showNotice(messages[result.status] || "无法添加当前结果。", result.status === "invalid");
+    render();
+  });
+
+  elements.save.addEventListener("click", () => {
+    const blob = new Blob([Persistence.serialize(state)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    elements.save.href = url;
+    elements.save.download = "eml-workbench-v2.json";
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      elements.save.href = "#";
+    }, 1000);
+    persistState();
+    showNotice("列表已保存到本地文件。", false);
+  });
+
+  elements.import.addEventListener("click", () => elements.importFile.click());
+  elements.importFile.addEventListener("change", () => {
+    const file = elements.importFile.files && elements.importFile.files[0];
+    elements.importFile.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const restored = Persistence.deserialize(String(reader.result || ""));
+      if (!restored.ok) {
+        showNotice(`导入失败：${restored.error}。现有列表未改变。`, true);
+        return;
+      }
+      state = restored.state;
+      recomputePreview();
+      persistState();
+      showNotice("导入成功。", false);
+      render();
+    };
+    reader.onerror = () => showNotice("导入失败：无法读取文件。现有列表未改变。", true);
+    reader.readAsText(file, "utf-8");
+  });
+
+  elements.clear.addEventListener("click", () => {
+    if (!window.confirm("清空所有非初始数值和公式？初始值 1 会保留。")) return;
+    state = Store.clearNonInitial();
+    preview = null;
+    persistState();
+    showNotice("已清空，初始值 1 已保留。", false);
+    render();
+  });
+
+  recomputePreview();
+  render();
+  root.EMLApp = {
+    getState: () => JSON.parse(JSON.stringify(state)),
+    getPreview: () => preview ? JSON.parse(JSON.stringify(preview)) : null,
+  };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+  </script>
+</body>
+</html>
