@@ -194,6 +194,45 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .formula-entry:last-child { border-bottom: 0; }
 .empty-formulas { color: var(--muted); }
 
+.tree-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.tree-heading h3 { margin: 0; }
+.tree-controls { display: flex; align-items: center; gap: 5px; }
+.icon-button {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  font-size: 19px;
+  line-height: 1;
+}
+.zoom-level { width: 46px; color: var(--muted); font-size: 12px; text-align: center; }
+.tree-viewport {
+  position: relative;
+  width: 100%;
+  height: min(58vh, 520px);
+  min-height: 280px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fbfcfc;
+  cursor: grab;
+  touch-action: none;
+}
+.tree-viewport:active { cursor: grabbing; }
+.tree-viewport:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+.tree-canvas {
+  width: max-content;
+  min-width: 100%;
+  padding: 10px 14px 22px;
+  transform-origin: 0 0;
+  will-change: transform;
+  user-select: none;
+}
+
 .tree-derivation { border-left: 3px solid #a9cdd1; padding: 4px 0 4px 14px; margin: 8px 0; }
 .tree-derivation summary { cursor: pointer; font-family: Cambria, "Times New Roman", serif; font-weight: 700; overflow-wrap: anywhere; }
 .tree-inputs, .rewrite-steps { margin: 9px 0 6px; padding-left: 22px; }
@@ -212,6 +251,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   .input-slot { width: 96px; }
   .result-slot { width: min(240px, 100%); }
   .value-button { max-width: calc(100vw - 32px); }
+  .tree-viewport { height: min(54vh, 440px); min-height: 240px; }
 }
 
   </style>
@@ -268,8 +308,18 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           <div id="directFormulaList"></div>
         </div>
         <div class="detail-block">
-          <h3>完整计算树</h3>
-          <div id="calculationTree"></div>
+          <div class="tree-heading">
+            <h3>完整计算树</h3>
+            <div class="tree-controls" aria-label="计算树视图控制">
+              <button type="button" id="treeZoomOut" class="icon-button" title="缩小计算树" aria-label="缩小计算树">−</button>
+              <output id="treeZoomLevel" class="zoom-level" aria-live="polite">100%</output>
+              <button type="button" id="treeZoomIn" class="icon-button" title="放大计算树" aria-label="放大计算树">+</button>
+              <button type="button" id="treeResetView" class="icon-button" title="复位计算树视图" aria-label="复位计算树视图">↺</button>
+            </div>
+          </div>
+          <div id="calculationTreeViewport" class="tree-viewport" tabindex="0" aria-label="完整计算树，可拖动或使用 W A S D 键移动">
+            <div id="calculationTree" class="tree-canvas"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -1398,6 +1448,62 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 });
 
 
+/* tree-viewport.js */
+(function (root, factory) {
+  "use strict";
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLTreeViewport = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const MIN_SCALE = 0.4;
+  const MAX_SCALE = 1.4;
+  const SCALE_STEP = 0.1;
+  const PAN_STEP = 48;
+
+  function clamp(value, minimum, maximum) {
+    return Math.min(maximum, Math.max(minimum, value));
+  }
+
+  function normalizeScale(scale) {
+    return Math.round(clamp(scale, MIN_SCALE, MAX_SCALE) * 10) / 10;
+  }
+
+  function clampPosition(view, dimensions) {
+    const width = Math.max(0, dimensions.contentWidth * view.scale);
+    const height = Math.max(0, dimensions.contentHeight * view.scale);
+    const minX = Math.min(0, dimensions.viewportWidth - width);
+    const minY = Math.min(0, dimensions.viewportHeight - height);
+    return {
+      scale: normalizeScale(view.scale),
+      x: clamp(view.x, minX, 0),
+      y: clamp(view.y, minY, 0),
+    };
+  }
+
+  function zoomAt(view, nextScale, origin, dimensions) {
+    const scale = normalizeScale(nextScale);
+    const ratio = scale / view.scale;
+    return clampPosition({
+      scale,
+      x: origin.x - (origin.x - view.x) * ratio,
+      y: origin.y - (origin.y - view.y) * ratio,
+    }, dimensions);
+  }
+
+  function pan(view, deltaX, deltaY, dimensions) {
+    return clampPosition({ ...view, x: view.x + deltaX, y: view.y + deltaY }, dimensions);
+  }
+
+  function reset() {
+    return { scale: 1, x: 0, y: 0 };
+  }
+
+  return { MIN_SCALE, MAX_SCALE, SCALE_STEP, PAN_STEP, normalizeScale, clampPosition, zoomAt, pan, reset };
+});
+
+
 /* app.js */
 (function (root) {
   "use strict";
@@ -1406,6 +1512,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const Evaluator = root.EMLEvaluator;
   const Store = root.EMLValueStore;
   const Persistence = root.EMLPersistence;
+  const TreeViewport = root.EMLTreeViewport;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -1424,13 +1531,62 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     detailsContent: document.getElementById("detailsContent"),
     selectedValue: document.getElementById("selectedValue"),
     directFormulaList: document.getElementById("directFormulaList"),
+    calculationTreeViewport: document.getElementById("calculationTreeViewport"),
     calculationTree: document.getElementById("calculationTree"),
+    treeZoomOut: document.getElementById("treeZoomOut"),
+    treeZoomIn: document.getElementById("treeZoomIn"),
+    treeZoomLevel: document.getElementById("treeZoomLevel"),
+    treeResetView: document.getElementById("treeResetView"),
   };
 
   let state = restoreState();
   let preview = null;
   let pointerDrag = null;
   let suppressValueClick = false;
+  let treeView = { ...TreeViewport.reset(), valueId: null };
+  let treePan = null;
+
+  function treeDimensions() {
+    return {
+      viewportWidth: elements.calculationTreeViewport.clientWidth,
+      viewportHeight: elements.calculationTreeViewport.clientHeight,
+      contentWidth: elements.calculationTree.scrollWidth,
+      contentHeight: elements.calculationTree.scrollHeight,
+    };
+  }
+
+  function applyTreeView() {
+    const next = TreeViewport.clampPosition(treeView, treeDimensions());
+    treeView = { ...next, valueId: treeView.valueId };
+    elements.calculationTree.style.transform = `translate(${treeView.x}px, ${treeView.y}px) scale(${treeView.scale})`;
+    elements.treeZoomLevel.textContent = `${Math.round(treeView.scale * 100)}%`;
+    elements.treeZoomOut.disabled = treeView.scale <= TreeViewport.MIN_SCALE;
+    elements.treeZoomIn.disabled = treeView.scale >= TreeViewport.MAX_SCALE;
+  }
+
+  function zoomTree(delta) {
+    const viewport = elements.calculationTreeViewport;
+    treeView = {
+      ...TreeViewport.zoomAt(
+        treeView,
+        treeView.scale + delta,
+        { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2 },
+        treeDimensions()
+      ),
+      valueId: treeView.valueId,
+    };
+    applyTreeView();
+  }
+
+  function panTree(deltaX, deltaY) {
+    treeView = { ...TreeViewport.pan(treeView, deltaX, deltaY, treeDimensions()), valueId: treeView.valueId };
+    applyTreeView();
+  }
+
+  function resetTreeView() {
+    treeView = { ...TreeViewport.reset(), valueId: state.selectedValueId };
+    applyTreeView();
+  }
 
   function restoreState() {
     try {
@@ -1628,6 +1784,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   function renderDetails() {
     const details = Store.getDetails(state, state.selectedValueId);
+    if (treeView.valueId !== state.selectedValueId) {
+      treeView = { ...TreeViewport.reset(), valueId: state.selectedValueId };
+    }
     elements.detailsEmpty.hidden = Boolean(details);
     elements.detailsContent.hidden = !details;
     elements.directFormulaList.replaceChildren();
@@ -1659,6 +1818,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         elements.calculationTree.appendChild(renderDerivation(derivation));
       });
     }
+    requestAnimationFrame(applyTreeView);
   }
 
   function render() {
@@ -1703,6 +1863,43 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   bindSlot(elements.slotX, "x");
   bindSlot(elements.slotY, "y");
+
+  elements.treeZoomOut.addEventListener("click", () => zoomTree(-TreeViewport.SCALE_STEP));
+  elements.treeZoomIn.addEventListener("click", () => zoomTree(TreeViewport.SCALE_STEP));
+  elements.treeResetView.addEventListener("click", resetTreeView);
+
+  elements.calculationTreeViewport.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;
+    treePan = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
+    elements.calculationTreeViewport.setPointerCapture(event.pointerId);
+    elements.calculationTreeViewport.focus();
+  });
+  elements.calculationTreeViewport.addEventListener("pointermove", (event) => {
+    if (!treePan || treePan.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    panTree(event.clientX - treePan.lastX, event.clientY - treePan.lastY);
+    treePan.lastX = event.clientX;
+    treePan.lastY = event.clientY;
+  });
+  function stopTreePan(event) {
+    if (treePan && treePan.pointerId === event.pointerId) treePan = null;
+  }
+  elements.calculationTreeViewport.addEventListener("pointerup", stopTreePan);
+  elements.calculationTreeViewport.addEventListener("pointercancel", stopTreePan);
+  elements.calculationTreeViewport.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const movements = {
+      w: [0, TreeViewport.PAN_STEP],
+      a: [TreeViewport.PAN_STEP, 0],
+      s: [0, -TreeViewport.PAN_STEP],
+      d: [-TreeViewport.PAN_STEP, 0],
+    };
+    const movement = movements[event.key.toLowerCase()];
+    if (!movement) return;
+    event.preventDefault();
+    panTree(...movement);
+  });
+  window.addEventListener("resize", applyTreeView);
 
   elements.add.addEventListener("click", () => {
     if (!preview || !preview.ok || !state.inputXId || !state.inputYId) return;
@@ -1767,6 +1964,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   root.EMLApp = {
     getState: () => JSON.parse(JSON.stringify(state)),
     getPreview: () => preview ? JSON.parse(JSON.stringify(preview)) : null,
+    getTreeView: () => ({ scale: treeView.scale, x: treeView.x, y: treeView.y }),
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 

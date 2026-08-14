@@ -5,6 +5,7 @@
   const Evaluator = root.EMLEvaluator;
   const Store = root.EMLValueStore;
   const Persistence = root.EMLPersistence;
+  const TreeViewport = root.EMLTreeViewport;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -23,13 +24,62 @@
     detailsContent: document.getElementById("detailsContent"),
     selectedValue: document.getElementById("selectedValue"),
     directFormulaList: document.getElementById("directFormulaList"),
+    calculationTreeViewport: document.getElementById("calculationTreeViewport"),
     calculationTree: document.getElementById("calculationTree"),
+    treeZoomOut: document.getElementById("treeZoomOut"),
+    treeZoomIn: document.getElementById("treeZoomIn"),
+    treeZoomLevel: document.getElementById("treeZoomLevel"),
+    treeResetView: document.getElementById("treeResetView"),
   };
 
   let state = restoreState();
   let preview = null;
   let pointerDrag = null;
   let suppressValueClick = false;
+  let treeView = { ...TreeViewport.reset(), valueId: null };
+  let treePan = null;
+
+  function treeDimensions() {
+    return {
+      viewportWidth: elements.calculationTreeViewport.clientWidth,
+      viewportHeight: elements.calculationTreeViewport.clientHeight,
+      contentWidth: elements.calculationTree.scrollWidth,
+      contentHeight: elements.calculationTree.scrollHeight,
+    };
+  }
+
+  function applyTreeView() {
+    const next = TreeViewport.clampPosition(treeView, treeDimensions());
+    treeView = { ...next, valueId: treeView.valueId };
+    elements.calculationTree.style.transform = `translate(${treeView.x}px, ${treeView.y}px) scale(${treeView.scale})`;
+    elements.treeZoomLevel.textContent = `${Math.round(treeView.scale * 100)}%`;
+    elements.treeZoomOut.disabled = treeView.scale <= TreeViewport.MIN_SCALE;
+    elements.treeZoomIn.disabled = treeView.scale >= TreeViewport.MAX_SCALE;
+  }
+
+  function zoomTree(delta) {
+    const viewport = elements.calculationTreeViewport;
+    treeView = {
+      ...TreeViewport.zoomAt(
+        treeView,
+        treeView.scale + delta,
+        { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2 },
+        treeDimensions()
+      ),
+      valueId: treeView.valueId,
+    };
+    applyTreeView();
+  }
+
+  function panTree(deltaX, deltaY) {
+    treeView = { ...TreeViewport.pan(treeView, deltaX, deltaY, treeDimensions()), valueId: treeView.valueId };
+    applyTreeView();
+  }
+
+  function resetTreeView() {
+    treeView = { ...TreeViewport.reset(), valueId: state.selectedValueId };
+    applyTreeView();
+  }
 
   function restoreState() {
     try {
@@ -227,6 +277,9 @@
 
   function renderDetails() {
     const details = Store.getDetails(state, state.selectedValueId);
+    if (treeView.valueId !== state.selectedValueId) {
+      treeView = { ...TreeViewport.reset(), valueId: state.selectedValueId };
+    }
     elements.detailsEmpty.hidden = Boolean(details);
     elements.detailsContent.hidden = !details;
     elements.directFormulaList.replaceChildren();
@@ -258,6 +311,7 @@
         elements.calculationTree.appendChild(renderDerivation(derivation));
       });
     }
+    requestAnimationFrame(applyTreeView);
   }
 
   function render() {
@@ -302,6 +356,43 @@
 
   bindSlot(elements.slotX, "x");
   bindSlot(elements.slotY, "y");
+
+  elements.treeZoomOut.addEventListener("click", () => zoomTree(-TreeViewport.SCALE_STEP));
+  elements.treeZoomIn.addEventListener("click", () => zoomTree(TreeViewport.SCALE_STEP));
+  elements.treeResetView.addEventListener("click", resetTreeView);
+
+  elements.calculationTreeViewport.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;
+    treePan = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
+    elements.calculationTreeViewport.setPointerCapture(event.pointerId);
+    elements.calculationTreeViewport.focus();
+  });
+  elements.calculationTreeViewport.addEventListener("pointermove", (event) => {
+    if (!treePan || treePan.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    panTree(event.clientX - treePan.lastX, event.clientY - treePan.lastY);
+    treePan.lastX = event.clientX;
+    treePan.lastY = event.clientY;
+  });
+  function stopTreePan(event) {
+    if (treePan && treePan.pointerId === event.pointerId) treePan = null;
+  }
+  elements.calculationTreeViewport.addEventListener("pointerup", stopTreePan);
+  elements.calculationTreeViewport.addEventListener("pointercancel", stopTreePan);
+  elements.calculationTreeViewport.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const movements = {
+      w: [0, TreeViewport.PAN_STEP],
+      a: [TreeViewport.PAN_STEP, 0],
+      s: [0, -TreeViewport.PAN_STEP],
+      d: [-TreeViewport.PAN_STEP, 0],
+    };
+    const movement = movements[event.key.toLowerCase()];
+    if (!movement) return;
+    event.preventDefault();
+    panTree(...movement);
+  });
+  window.addEventListener("resize", applyTreeView);
 
   elements.add.addEventListener("click", () => {
     if (!preview || !preview.ok || !state.inputXId || !state.inputYId) return;
@@ -366,5 +457,6 @@
   root.EMLApp = {
     getState: () => JSON.parse(JSON.stringify(state)),
     getPreview: () => preview ? JSON.parse(JSON.stringify(preview)) : null,
+    getTreeView: () => ({ scale: treeView.scale, x: treeView.x, y: treeView.y }),
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

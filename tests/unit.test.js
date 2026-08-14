@@ -6,11 +6,38 @@ const Rules = require("../src/formula-rules.js");
 const Evaluator = require("../src/evaluator.js");
 const Store = require("../src/value-store.js");
 const Persistence = require("../src/persistence.js");
+const TreeViewport = require("../src/tree-viewport.js");
 
 const evaluate = (x, y) => Evaluator.evaluateEML(x, y);
 const initial = () => Store.createInitialState();
 const add = (state, evaluation, xId = Store.initialValueId, yId = Store.initialValueId) =>
   Store.addEvaluation(state, evaluation, xId, yId);
+
+test("计算树缩放限制在 40% 到 140%", () => {
+  assert.equal(TreeViewport.normalizeScale(0.1), 0.4);
+  assert.equal(TreeViewport.normalizeScale(2), 1.4);
+  assert.equal(TreeViewport.normalizeScale(0.74), 0.7);
+});
+
+test("计算树缩放围绕指定位置并限制位移", () => {
+  const dimensions = { viewportWidth: 500, viewportHeight: 300, contentWidth: 1000, contentHeight: 900 };
+  const zoomed = TreeViewport.zoomAt({ scale: 1, x: 0, y: 0 }, 0.8, { x: 250, y: 150 }, dimensions);
+  assert.deepEqual(zoomed, { scale: 0.8, x: 0, y: 0 });
+  const enlarged = TreeViewport.zoomAt({ scale: 1, x: -100, y: -100 }, 1.2, { x: 250, y: 150 }, dimensions);
+  assert.deepEqual(enlarged, { scale: 1.2, x: -170, y: -150 });
+});
+
+test("计算树平移不会把内容完全移出可视区域", () => {
+  const dimensions = { viewportWidth: 500, viewportHeight: 300, contentWidth: 1000, contentHeight: 900 };
+  assert.deepEqual(
+    TreeViewport.pan({ scale: 1, x: 0, y: 0 }, -5000, -5000, dimensions),
+    { scale: 1, x: -500, y: -600 }
+  );
+  assert.deepEqual(
+    TreeViewport.pan({ scale: 1, x: -100, y: -100 }, 5000, 5000, dimensions),
+    { scale: 1, x: 0, y: 0 }
+  );
+});
 
 test("U01 EML(1, 1) 化简为 e", () => {
   const result = evaluate(Expr.ONE, Expr.ONE);

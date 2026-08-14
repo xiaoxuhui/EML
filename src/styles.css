@@ -186,6 +186,45 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .formula-entry:last-child { border-bottom: 0; }
 .empty-formulas { color: var(--muted); }
 
+.tree-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.tree-heading h3 { margin: 0; }
+.tree-controls { display: flex; align-items: center; gap: 5px; }
+.icon-button {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  font-size: 19px;
+  line-height: 1;
+}
+.zoom-level { width: 46px; color: var(--muted); font-size: 12px; text-align: center; }
+.tree-viewport {
+  position: relative;
+  width: 100%;
+  height: min(58vh, 520px);
+  min-height: 280px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fbfcfc;
+  cursor: grab;
+  touch-action: none;
+}
+.tree-viewport:active { cursor: grabbing; }
+.tree-viewport:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+.tree-canvas {
+  width: max-content;
+  min-width: 100%;
+  padding: 10px 14px 22px;
+  transform-origin: 0 0;
+  will-change: transform;
+  user-select: none;
+}
+
 .tree-derivation { border-left: 3px solid #a9cdd1; padding: 4px 0 4px 14px; margin: 8px 0; }
 .tree-derivation summary { cursor: pointer; font-family: Cambria, "Times New Roman", serif; font-weight: 700; overflow-wrap: anywhere; }
 .tree-inputs, .rewrite-steps { margin: 9px 0 6px; padding-left: 22px; }
@@ -204,4 +243,5 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   .input-slot { width: 96px; }
   .result-slot { width: min(240px, 100%); }
   .value-button { max-width: calc(100vw - 32px); }
+  .tree-viewport { height: min(54vh, 440px); min-height: 240px; }
 }

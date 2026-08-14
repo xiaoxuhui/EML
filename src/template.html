@@ -61,8 +61,18 @@
           <div id="directFormulaList"></div>
         </div>
         <div class="detail-block">
-          <h3>完整计算树</h3>
-          <div id="calculationTree"></div>
+          <div class="tree-heading">
+            <h3>完整计算树</h3>
+            <div class="tree-controls" aria-label="计算树视图控制">
+              <button type="button" id="treeZoomOut" class="icon-button" title="缩小计算树" aria-label="缩小计算树">−</button>
+              <output id="treeZoomLevel" class="zoom-level" aria-live="polite">100%</output>
+              <button type="button" id="treeZoomIn" class="icon-button" title="放大计算树" aria-label="放大计算树">+</button>
+              <button type="button" id="treeResetView" class="icon-button" title="复位计算树视图" aria-label="复位计算树视图">↺</button>
+            </div>
+          </div>
+          <div id="calculationTreeViewport" class="tree-viewport" tabindex="0" aria-label="完整计算树，可拖动或使用 W A S D 键移动">
+            <div id="calculationTree" class="tree-canvas"></div>
+          </div>
         </div>
       </div>
     </section>

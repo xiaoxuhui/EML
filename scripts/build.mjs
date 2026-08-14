@@ -15,6 +15,7 @@ const scriptFiles = [
   "evaluator.js",
   "value-store.js",
   "persistence.js",
+  "tree-viewport.js",
   "app.js",
 ];
 const scripts = scriptFiles
