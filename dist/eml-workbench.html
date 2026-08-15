@@ -84,6 +84,15 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 
 .eyebrow { margin: 0 0 2px; color: var(--muted); font-size: 12px; }
 h1 { margin: 0; font-size: 30px; line-height: 1; }
+.base-formula {
+  margin: 8px 0 0;
+  color: #34434d;
+  font-family: Cambria, "Times New Roman", serif;
+  font-size: 18px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.base-formula sup { font-size: 0.7em; }
 h2 { margin: 0; font-size: 17px; }
 h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
@@ -262,6 +271,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       <div>
         <p class="eyebrow">符号计算工作台</p>
         <h1>EML</h1>
+        <p class="base-formula" aria-label="基础公式：EML x y 等于 e 的 x 次方减去 y 的自然对数">
+          EML(x, y) = e<sup>x</sup> - ln(y)
+        </p>
       </div>
       <div class="file-actions" aria-label="文件操作">
         <a href="#" id="saveButton" class="button-link" download="eml-workbench-v2.json">保存列表</a>
