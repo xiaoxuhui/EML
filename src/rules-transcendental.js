@@ -11,7 +11,7 @@
   "use strict";
 
   const { TYPES, ONE, ZERO, E, PI, I, integer, neg, mul, div, pow, sub, isSame, isInteger, isConstant } = Expr;
-  const { isProvablyPositive, isProvablyNonZero } = Properties;
+  const { isProvablyReal, isProvablyPositive, isProvablyNonZero } = Properties;
 
   const rules = [
     { id: "EXP_ZERO", label: "e^0 = 1" },
@@ -31,8 +31,10 @@
     { id: "LN_E", label: "ln(e) = 1" },
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
+    { id: "LN_I", label: "ln(i) = iπ / 2（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
     { id: "LN_EXP_QUOTIENT", label: "ln(e^a / b) = a - ln(b)（b ≠ 0，形式化规则）" },
+    { id: "LN_REAL_EXP_PRODUCT", label: "ln(e^a × b) = a + ln(b)（a 为实数，b ≠ 0）" },
     { id: "LN_RECIPROCAL", label: "ln(1 / a) = -ln(a)（a ≠ 0，形式化规则）" },
     { id: "EULER_SINE", label: "(e^(ia) - e^(-ia)) / (2i) = sin(a)" },
   ];
@@ -166,6 +168,25 @@
       if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) {
         return { expression: expression.argument.exponent, ruleId: "LN_EXP_FORMAL" };
       }
+      if (expression.argument.type === TYPES.MUL) {
+        const exponential = expression.argument.left.type === TYPES.POW &&
+          isConstant(expression.argument.left.base, "e")
+          ? expression.argument.left
+          : expression.argument.right.type === TYPES.POW && isConstant(expression.argument.right.base, "e")
+            ? expression.argument.right
+            : null;
+        if (exponential && isProvablyReal(exponential.exponent)) {
+          const other = exponential === expression.argument.left
+            ? expression.argument.right
+            : expression.argument.left;
+          if (isProvablyNonZero(other)) {
+            return {
+              expression: Expr.add(exponential.exponent, Expr.ln(other)),
+              ruleId: "LN_REAL_EXP_PRODUCT",
+            };
+          }
+        }
+      }
       if (
         expression.argument.type === TYPES.DIV && expression.argument.numerator.type === TYPES.POW &&
         isConstant(expression.argument.numerator.base, "e") && isProvablyNonZero(expression.argument.denominator)
@@ -180,6 +201,9 @@
         isProvablyNonZero(expression.argument.denominator)
       ) return { expression: neg(Expr.ln(expression.argument.denominator)), ruleId: "LN_RECIPROCAL" };
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
+      if (isConstant(expression.argument, "i")) {
+        return { expression: div(mul(I, PI), integer(2)), ruleId: "LN_I" };
+      }
     }
 
     if (
@@ -210,4 +234,3 @@
     eulerSineArgument,
   };
 });
-

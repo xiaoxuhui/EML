@@ -348,6 +348,24 @@ test("回归：e - ln(e^e / 2) 化简为 ln(2)", () => {
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
 });
 
+test("回归：e - ln(e^e × i) 化简为 -iπ / 2", () => {
+  const y = Expr.mul(Expr.pow(Expr.E, Expr.E), Expr.I);
+  const result = evaluate(Expr.ONE, y);
+  assert.equal(result.displayText, "-iπ / 2");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_REAL_EXP_PRODUCT"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_I"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_ADDED_LEFT"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "NEG_DIV"));
+});
+
+test("乘积对数规则不展开复指数或零因子", () => {
+  const complexExponent = Expr.mul(Expr.I, Expr.PI);
+  const complexResult = Rules.simplify(Expr.ln(Expr.mul(Expr.pow(Expr.E, complexExponent), Expr.I)));
+  const zeroResult = Rules.simplify(Expr.ln(Expr.mul(Expr.pow(Expr.E, Expr.E), Expr.ZERO)));
+  assert.equal(complexResult.steps.some((step) => step.ruleId === "LN_REAL_EXP_PRODUCT"), false);
+  assert.equal(zeroResult.steps.some((step) => step.ruleId === "LN_REAL_EXP_PRODUCT"), false);
+});
+
 test("指数商对数形式化规则支持非零负分母", () => {
   const argument = Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(-2));
   const result = Rules.simplify(Expr.ln(argument));

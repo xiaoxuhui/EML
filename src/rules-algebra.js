@@ -16,6 +16,7 @@
   const rules = [
     { id: "NEG_INTEGER", label: "负整数化简" },
     { id: "NEG_DOUBLE", label: "-(-a) = a" },
+    { id: "NEG_DIV", label: "-(a / b) = (-a) / b" },
     { id: "INTEGER_ADD", label: "整数加法" },
     { id: "INTEGER_SUB", label: "整数减法" },
     { id: "INTEGER_MUL", label: "整数乘法" },
@@ -48,6 +49,12 @@
     }
     if (expression.type === TYPES.NEG && expression.child.type === TYPES.INTEGER) {
       return { expression: integer(-expression.child.value), ruleId: "NEG_INTEGER" };
+    }
+    if (expression.type === TYPES.NEG && expression.child.type === TYPES.DIV) {
+      return {
+        expression: Expr.div(neg(expression.child.numerator), expression.child.denominator),
+        ruleId: "NEG_DIV",
+      };
     }
 
     if (expression.type === TYPES.ADD) {
@@ -156,4 +163,3 @@
 
   return { name: "algebra", rules, rewrite };
 });
-

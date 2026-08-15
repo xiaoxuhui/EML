@@ -5,7 +5,7 @@ const Rules = require("../src/formula-rules.js");
 
 test("规则注册表按领域拆分且编号唯一", () => {
   assert.deepEqual(Rules.registries.map((registry) => registry.name), ["transcendental", "algebra"]);
-  assert.equal(Rules.rules.length, 47);
+  assert.equal(Rules.rules.length, 50);
   assert.equal(new Set(Rules.rules.map((rule) => rule.id)).size, Rules.rules.length);
 });
 
