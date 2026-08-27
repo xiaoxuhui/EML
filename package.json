@@ -1,7 +1,20 @@
 {
   "name": "eml-workbench",
   "version": "1.1.0",
-  "private": true,
+  "description": "EML 计算台：基于 EML(x, y) = e^x - ln(y) 的本地符号计算工作台，支持复数域、公式化简与完整计算树",
+  "license": "MIT",
+  "author": "xiaoxuhui",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xiaoxuhui/EML.git"
+  },
+  "keywords": [
+    "symbolic-computation",
+    "math",
+    "complex-numbers",
+    "calculator",
+    "education"
+  ],
   "scripts": {
     "test": "node --test tests/*.test.js",
     "build": "node scripts/build.mjs"
