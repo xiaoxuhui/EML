@@ -11,9 +11,18 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, FormulaRules) {
   "use strict";
 
+  function isExactlyZero(expression) {
+    if (Expr.isInteger(expression, 0)) return true;
+    if (expression.type === Expr.TYPES.NEG) return isExactlyZero(expression.child);
+    if (expression.type === Expr.TYPES.MUL) {
+      return isExactlyZero(expression.left) || isExactlyZero(expression.right);
+    }
+    if (expression.type === Expr.TYPES.SUB) return Expr.isSame(expression.left, expression.right);
+    return false;
+  }
+
   function evaluateEML(xExpression, yExpression) {
-    const yApproximation = Expr.approximate(yExpression);
-    if (yApproximation && Math.abs(yApproximation.re) < 1e-12 && Math.abs(yApproximation.im) < 1e-12) {
+    if (isExactlyZero(yExpression)) {
       return { ok: false, error: "ln(0) 未定义" };
     }
 

@@ -366,11 +366,14 @@ test("乘积对数规则不展开复指数或零因子", () => {
   assert.equal(zeroResult.steps.some((step) => step.ruleId === "LN_REAL_EXP_PRODUCT"), false);
 });
 
-test("指数商对数形式化规则支持非零负分母", () => {
-  const argument = Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(-2));
-  const result = Rules.simplify(Expr.ln(argument));
-  assert.equal(Expr.render(result.expression), "e - ln(-2)");
-  assert.ok(result.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
+test("指数商对数规则仅在分母为正实数时展开（避免 2πi 分支错误）", () => {
+  const positive = Rules.simplify(Expr.ln(Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(2))));
+  assert.equal(Expr.render(positive.expression), "e - ln(2)");
+  assert.ok(positive.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
+
+  const negative = Rules.simplify(Expr.ln(Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(-2))));
+  assert.equal(negative.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"), false);
+  assert.equal(Expr.render(negative.expression), "ln(e^(e) / -2)");
 });
 
 test("指数商对数规则不展开零分母", () => {
@@ -411,22 +414,24 @@ test("负对数指数规则不消去 ln(0)", () => {
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_NEG_LN"), false);
 });
 
-test("回归：e - ln(e^e / (e - i)) 化简为 ln(e - i)", () => {
+test("回归：EML(1, e^e/(e-i)) 数值上等于 ln(e-i)（严格规则下不再强行符号化简，但无 2πi 分支错误）", () => {
   const denominator = Expr.sub(Expr.E, Expr.I);
   const y = Expr.div(Expr.pow(Expr.E, Expr.E), denominator);
   const result = evaluate(Expr.ONE, y);
-  assert.equal(result.displayText, "ln(e - i)");
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
+  const expected = Expr.approximate(Expr.ln(denominator));
+  const actual = Expr.approximate(result.resultExpression);
+  assert.ok(Math.abs(actual.re - expected.re) < 1e-9);
+  assert.ok(Math.abs(actual.im - expected.im) < 1e-9);
 });
 
-test("回归：e^(ln(i - ln(iπ))) - i 化简为 -ln(iπ)", () => {
+test("回归：e^(ln(i - ln(iπ))) - i 数值上等于 -ln(iπ)（严格零保护下不再强行化简，但无分支错误）", () => {
   const argument = Expr.sub(Expr.I, Expr.ln(Expr.mul(Expr.I, Expr.PI)));
   const expression = Expr.sub(Expr.pow(Expr.E, Expr.ln(argument)), Expr.I);
   const result = Rules.simplify(expression);
-  assert.equal(Expr.render(result.expression), "-ln(iπ)");
-  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
-  assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_RIGHT"));
+  const expected = Expr.approximate(Expr.neg(Expr.ln(Expr.mul(Expr.I, Expr.PI))));
+  const actual = Expr.approximate(result.expression);
+  assert.ok(Math.abs(actual.re - expected.re) < 1e-9);
+  assert.ok(Math.abs(actual.im - expected.im) < 1e-9);
 });
 
 test("形式化 e^ln 规则仍阻止明确的零参数", () => {
