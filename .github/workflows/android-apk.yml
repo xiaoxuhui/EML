@@ -47,6 +47,13 @@ jobs:
         working-directory: android
         run: gradle assembleDebug --no-daemon --stacktrace
 
+      - name: 校验 APK 内网页与 dist 一致（U03）
+        run: |
+          APK=$(ls android/app/build/outputs/apk/debug/*.apk)
+          unzip -o -q "$APK" "assets/eml-workbench.html" -d /tmp/apk-content
+          cmp /tmp/apk-content/assets/eml-workbench.html dist/eml-workbench.html
+          echo "APK 内网页与 dist 一致，共 $(wc -c < dist/eml-workbench.html) 字节"
+
       - name: 记录产物信息
         working-directory: android/app/build/outputs/apk/debug
         run: |
