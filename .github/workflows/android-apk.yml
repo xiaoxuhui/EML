@@ -1,0 +1,71 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    paths:
+      - "android/**"
+      - "scripts/sync-android-assets.mjs"
+      - "dist/eml-workbench.html"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "scripts/sync-android-assets.mjs"
+      - "dist/eml-workbench.html"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 构建 debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 同步网页资源到 assets
+        run: node scripts/sync-android-assets.mjs
+
+      - name: 校验同步结果
+        run: node scripts/sync-android-assets.mjs --check
+
+      - name: 准备 Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: 构建 APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: 记录产物信息
+        working-directory: android/app/build/outputs/apk/debug
+        run: |
+          ls -l
+          sha256sum ./*.apk | tee apk-sha256.txt
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: eml-calculator-debug-apk
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/debug/apk-sha256.txt
+          if-no-files-found: error
+
+      - name: 上传构建报告
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: android/app/build/reports/**
+          if-no-files-found: ignore
