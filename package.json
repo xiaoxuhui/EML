@@ -1,6 +1,6 @@
 {
   "name": "eml-workbench",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "EML 计算台：基于 EML(x, y) = e^x - ln(y) 的本地符号计算工作台，支持复数域、公式化简与完整计算树",
   "license": "MIT",
   "author": "xiaoxuhui",
