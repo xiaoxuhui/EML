@@ -43,38 +43,36 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: 确保 Android SDK 就位
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-34 build-tools;34.0.0"
+
+      - name: 记录环境（可见于 CI 注解）
+        run: |
+          java -version 2>&1 | head -3
+          echo "ANDROID_HOME=${ANDROID_HOME:-未设置}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-未设置}"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "::notice title=构建环境::java=$(java -version 2>&1 | head -1) | ANDROID_HOME=${ANDROID_HOME:-无} | platforms=$(ls "$SDK/platforms" 2>/dev/null | tr '\n' ',') | build-tools=$(ls "$SDK/build-tools" 2>/dev/null | tr '\n' ',')"
+
       - name: 构建 APK
+        id: build
         working-directory: android
         run: |
           set -o pipefail
           gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
 
-      - name: 输出构建诊断与日志
-        if: always()
+      - name: 输出构建失败日志（可见于 CI 注解）
+        if: failure()
         run: |
-          {
-            echo "## 构建诊断"
-            echo ""
-            echo "### 环境"
-            echo '```'
-            java -version 2>&1 | head -3
-            echo "ANDROID_HOME=${ANDROID_HOME:-未设置}"
-            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-未设置}"
-            SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-            echo "platforms: $(ls "$SDK/platforms" 2>/dev/null | tr '\n' ' ')"
-            echo "build-tools: $(ls "$SDK/build-tools" 2>/dev/null | tr '\n' ' ')"
-            gradle --version 2>&1 | head -12
-            echo '```'
-            echo ""
-            echo "### Gradle 日志（末尾 150 行）"
-            echo '```'
-            if [ -f "$RUNNER_TEMP/gradle-build.log" ]; then
-              tail -150 "$RUNNER_TEMP/gradle-build.log"
-            else
-              echo "（未生成日志）"
-            fi
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -f "$RUNNER_TEMP/gradle-build.log" ]; then
+            echo "::error title=构建失败且无日志::未生成 $RUNNER_TEMP/gradle-build.log"
+            exit 0
+          fi
+          TAIL=$(tail -40 "$RUNNER_TEMP/gradle-build.log")
+          ESC=$(printf '%s' "$TAIL" | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"} {print}')
+          echo "::error title=Gradle 日志尾部::${ESC}"
 
       - name: 校验 APK 内网页与 dist 一致（U03）
         run: |
@@ -88,6 +86,8 @@ jobs:
         run: |
           ls -l
           sha256sum ./*.apk | tee apk-sha256.txt
+          APK=$(ls ./*.apk | head -1)
+          echo "::notice title=APK 产物::$(basename "$APK") | 大小 $(du -h "$APK" | cut -f1) | sha256 $(sha256sum "$APK" | cut -c1-16)"
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
