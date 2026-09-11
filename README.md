@@ -29,6 +29,10 @@ EML(x, y) = e^x - ln(y)
 python -m http.server 8080
 ```
 
+**方式三：安卓 APK（离线安装版）**
+在手机/平板上安装 `EML 计算台`，自带网页资源、完全离线运行、不申请任何权限。
+构建方式与产物获取见 [`android/README.md`](./android/README.md)。
+
 > ⚠️ 仓库根目录 `../eml-workbench.html`（工作区 `D:\soft\`）是 **v1.0.0 的旧单文件原型**，没有规则引擎与计算树。请使用 `dist/eml-workbench.html`。
 
 ---
@@ -95,6 +99,7 @@ EML/
 │   └── template.html / styles.css
 ├── tests/               # 单元测试（node --test）
 ├── dist/                # 构建产物（单文件 HTML，可直接打开）
+├── android/             # 安卓 APK 外壳（WebView 容器，见 android/README.md）
 ├── doc/                 # 需求/设计/测试报告/重构待办
 ├── scripts/build.mjs    # 构建脚本
 └── release/             # 发布包

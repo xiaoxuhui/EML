@@ -66,13 +66,18 @@ jobs:
       - name: 输出构建失败日志（可见于 CI 注解）
         if: failure()
         run: |
-          if [ ! -f "$RUNNER_TEMP/gradle-build.log" ]; then
-            echo "::error title=构建失败且无日志::未生成 $RUNNER_TEMP/gradle-build.log"
+          LOG="$RUNNER_TEMP/gradle-build.log"
+          if [ ! -f "$LOG" ]; then
+            echo "::error title=构建失败且无日志::未生成 $LOG"
             exit 0
           fi
-          TAIL=$(tail -40 "$RUNNER_TEMP/gradle-build.log")
+          ERRORS=$(grep -E '^e: ' "$LOG" | head -40 || true)
+          if [ -z "$ERRORS" ]; then
+            ERRORS=$(grep -iE 'error:|FAILURE|What went wrong|Could not' "$LOG" | head -40 || true)
+          fi
+          TAIL=$(printf '%s\n%s\n%s' "$ERRORS" "--- 末尾 8 行 ---" "$(tail -8 "$LOG")")
           ESC=$(printf '%s' "$TAIL" | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"} {print}')
-          echo "::error title=Gradle 日志尾部::${ESC}"
+          echo "::error title=Gradle 构建错误::${ESC}"
 
       - name: 校验 APK 内网页与 dist 一致（U03）
         run: |

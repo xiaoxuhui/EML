@@ -235,8 +235,8 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val ASSET_DOMAIN = "appassets.androidplatform.net"
-        private const val PAGE_URL = "https://$ASSET_DOMAIN/assets/$ASSET_FILE"
         private const val ASSET_FILE = "eml-workbench.html"
+        private const val PAGE_URL = "https://$ASSET_DOMAIN/assets/$ASSET_FILE"
 
         /**
          * 拦截网页的「保存列表」：网页用 Blob URL + download 属性导出，
