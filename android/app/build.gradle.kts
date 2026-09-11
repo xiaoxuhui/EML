@@ -32,11 +32,6 @@ android {
         }
     }
 
-    // 网页资源已压缩为单文件，无需再压缩 assets
-    androidResources {
-        noCompress += "html"
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

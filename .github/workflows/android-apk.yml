@@ -45,7 +45,36 @@ jobs:
 
       - name: 构建 APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
+
+      - name: 输出构建诊断与日志
+        if: always()
+        run: |
+          {
+            echo "## 构建诊断"
+            echo ""
+            echo "### 环境"
+            echo '```'
+            java -version 2>&1 | head -3
+            echo "ANDROID_HOME=${ANDROID_HOME:-未设置}"
+            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-未设置}"
+            SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+            echo "platforms: $(ls "$SDK/platforms" 2>/dev/null | tr '\n' ' ')"
+            echo "build-tools: $(ls "$SDK/build-tools" 2>/dev/null | tr '\n' ' ')"
+            gradle --version 2>&1 | head -12
+            echo '```'
+            echo ""
+            echo "### Gradle 日志（末尾 150 行）"
+            echo '```'
+            if [ -f "$RUNNER_TEMP/gradle-build.log" ]; then
+              tail -150 "$RUNNER_TEMP/gradle-build.log"
+            else
+              echo "（未生成日志）"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 校验 APK 内网页与 dist 一致（U03）
         run: |
