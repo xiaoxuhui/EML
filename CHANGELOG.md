@@ -2,6 +2,29 @@
 
 本文件记录 EML 计算台的重要变更。版本格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [1.2.0] - 2026-09-11
+
+### 新增
+- **安卓版**：`android/` 极简 WebView 外壳，把网页封装为可离线安装的 APK
+  - 包名 `com.xiaoxuhui.eml`，应用名「EML 计算台」，minSdk 24（Android 7.0）/ targetSdk 34
+  - **不申请任何权限**，完全离线运行
+  - 自适应图标（5 密度传统图标 + 自适应前景层与渐变背景层）
+- `scripts/sync-android-assets.mjs`：把 `dist/eml-workbench.html` 同步进 APK 的 assets，
+  网页保持单一数据源；assets 不入库（`npm run sync:android` / `npm run check:android`）
+- `.github/workflows/android-apk.yml`：安卓 APK 云构建，推送分支自动构建，
+  打 `v*` tag 时自动创建 Release 并附带 APK
+- 7 条安卓外壳结构测试（应用身份、无权限声明、资源一致、旋转配置、WebView 关键配置、图标齐全）
+
+### 说明
+- 安卓外壳不修改任何网页源码，手机与浏览器共用同一份 `dist/eml-workbench.html`
+- 触摸端 HTML5 拖放不触发，请使用「选中数值 → 点 x/y 槽位 → 添加」路径
+- 网页的「保存列表」在 WebView 中经 JS 桥改写为写入系统下载目录
+  （Android 10+ 走 MediaStore，更低版本写应用外部目录）
+- 首版使用 **debug 签名**，安装前需允许「安装未知来源应用」
+
+### 兼容性
+- 网页端行为与 v1.1.0 完全一致，保存文件格式仍为 **V2**，安卓版与网页版数据可互相导入导出
+
 ## [1.1.0] - 2026-08-28
 
 ### 新增
