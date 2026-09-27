@@ -2,6 +2,30 @@
 
 本文件记录 EML 计算台的重要变更。版本格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [1.2.1] - 2026-09-28
+
+> **未单独发版**：本版改动随 [1.3.0] 一并发布，v1.2.1 不单独打标签。
+
+### 修复
+- **安卓包无法覆盖升级**（关键）：AGP 在未配置 `signingConfig` 时会为**每台构建机**
+  自动生成随机 debug keystore。GitHub Actions 每次都是全新 runner，于是每次发布的
+  APK 签名都不同，老用户安装新包会被系统直接拒绝
+  （`INSTALL_FAILED_UPDATE_INCOMPATIBLE`），表现为「有新版本，但一直更新不了」。
+  现固定使用仓库内的 `android/app/debug.keystore` 并显式声明 `storeType = "PKCS12"`。
+- 安卓 `versionCode` 未随网页升版递增（部分安装器会据此判定「无更新」）：2 → 3。
+
+### 变更
+- 新增 3 条安卓外壳测试，把这两类事故钉死：
+  1. 固定签名存在且被 `build.gradle.kts` 引用；
+  2. `versionCode` 严格递增；
+  3. 安卓 `versionName` 与 `package.json` 的 `version` 同线。
+
+### 说明
+- **升级注意**：v1.2.0 的 APK 由构建时现场生成的随机 debug key 签发，该密钥无法复现，
+  因此**从 v1.2.0 升到 v1.3.0 需要先卸载旧版再安装一次**。
+  从 v1.3.0 起签名固定，此后可正常覆盖升级。
+- 网页端行为无任何变化。
+
 ## [1.2.0] - 2026-09-11
 
 ### 新增

@@ -5,3 +5,6 @@ android/gradlew text eol=lf
 *.png binary
 *.jar binary
 *.apk binary
+*.zip binary
+# 签名密钥必须按二进制处理：一旦被换行转换改写，签名即失效，安卓包将无法覆盖升级
+*.keystore binary

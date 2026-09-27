@@ -39,9 +39,67 @@ test("应用身份与需求一致（包名/SDK/版本）", async () => {
   assert.match(gradle, /applicationId\s*=\s*"com\.xiaoxuhui\.eml"/);
   assert.match(gradle, /minSdk\s*=\s*24/);
   assert.match(gradle, /targetSdk\s*=\s*34/);
-  assert.match(gradle, /versionCode\s*=\s*2/);
-  assert.match(gradle, /versionName\s*=\s*"1\.2\.0"/);
+  assert.match(gradle, /versionCode\s*=\s*3/);
+  assert.match(gradle, /versionName\s*=\s*"1\.2\.1"/);
   assert.match(gradle, /namespace\s*=\s*"com\.xiaoxuhui\.eml"/);
+});
+
+/**
+ * 「无法更新」的直接原因之二：签名不一致。
+ *
+ * AGP 在没配 signingConfig 时会为每台构建机自动生成随机 debug key。
+ * GitHub Actions 每次都是全新 runner，于是每次发布的 APK 签名都不同，
+ * 老用户装新包被系统拒绝（INSTALL_FAILED_UPDATE_INCOMPATIBLE）——
+ * 表现为「有新版本，但装不上」。
+ *
+ * 实证：v1.2.0 的线上 APK 里，签名证书的 notBefore 是 Sep 11 00:55:48 2026，
+ * 与那次 Release 的发布时间只差 18 秒 —— 证书是构建时现场生成的，不是仓库里的固定文件。
+ * 所以 keystore 必须入库且被显式引用。
+ */
+test("固定 debug 签名存在且被 gradle 引用（否则新包无法覆盖安装）", async () => {
+  const gradle = await read(path.join(ANDROID, "app", "build.gradle.kts"));
+
+  assert.match(gradle, /signingConfigs\s*\{/, "build.gradle.kts 缺少 signingConfigs 块");
+  assert.match(
+    gradle,
+    /storeFile\s*=\s*file\("debug\.keystore"\)/,
+    "debug 签名没有指向仓库内的 debug.keystore"
+  );
+  assert.match(gradle, /storeType\s*=\s*"PKCS12"/, '缺少 storeType = "PKCS12"');
+  assert.match(gradle, /keyAlias\s*=\s*"androiddebugkey"/);
+
+  assert.ok(
+    existsSync(path.join(ANDROID, "app", "debug.keystore")),
+    "android/app/debug.keystore 缺失 —— 它必须入库，否则 CI 只能用随机签名签发，老用户装不上新版"
+  );
+});
+
+/**
+ * v1.2.1 的真实教训：网页升版后安卓包没跟着动，versionCode 没递增，
+ * 用户「重启之后无法更新」—— 因为 Release 上没有新包，且同 versionCode 的包
+ * 会被部分安装器判定为「无更新」而拒绝覆盖。
+ *
+ * 这两条把「网页升版必须同步安卓包」钉死：
+ *  - versionCode 严格大于上一版的 2（Android 只认递增，回退会导致装不上）
+ *  - versionName 与 package.json 的 version 同线（用户能一眼看出装的是哪一版）
+ */
+test("版本号与网页版同线且 versionCode 已递增（防止装不上新包）", async () => {
+  const gradle = await read(path.join(ANDROID, "app", "build.gradle.kts"));
+  const pkg = JSON.parse(await read(path.join(ROOT, "package.json")));
+
+  const versionCode = Number((gradle.match(/versionCode\s*=\s*(\d+)/) || [])[1]);
+  const versionName = (gradle.match(/versionName\s*=\s*"([^"]+)"/) || [])[1];
+
+  assert.ok(
+    Number.isInteger(versionCode) && versionCode > 2,
+    `versionCode 必须大于 2（v1.2.0 用的是 2），当前为 ${versionCode}`
+  );
+  assert.equal(
+    versionName,
+    pkg.version,
+    `安卓 versionName（${versionName}）应与 package.json 的 version（${pkg.version}）一致；` +
+      "安卓包内嵌的就是同一份网页产物，版本线分开会让用户分不清装的是哪一版"
+  );
 });
 
 test("应用显示名为「EML 计算台」", async () => {
