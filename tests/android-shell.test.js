@@ -39,8 +39,10 @@ test("应用身份与需求一致（包名/SDK/版本）", async () => {
   assert.match(gradle, /applicationId\s*=\s*"com\.xiaoxuhui\.eml"/);
   assert.match(gradle, /minSdk\s*=\s*24/);
   assert.match(gradle, /targetSdk\s*=\s*34/);
-  assert.match(gradle, /versionCode\s*=\s*3/);
-  assert.match(gradle, /versionName\s*=\s*"1\.2\.1"/);
+  // 具体版本号不在断言里硬编码：它是「随发版变化的量」，硬编码等于同一事实维护两处。
+  // 格式正确性与「与 package.json 同线」分别由下面的专项测试把关。
+  assert.match(gradle, /versionCode\s*=\s*\d+/);
+  assert.match(gradle, /versionName\s*=\s*"\d+\.\d+\.\d+"/);
   assert.match(gradle, /namespace\s*=\s*"com\.xiaoxuhui\.eml"/);
 });
 

@@ -250,6 +250,58 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .tree-label { font-family: Cambria, "Times New Roman", serif; font-weight: 600; }
 .rewrite-steps { color: var(--muted); font-size: 13px; }
 
+/* 推导过程：从初始值到当前数值的线性建造顺序 */
+.trace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.trace-heading h3 { margin: 0; }
+.trace-summary { color: var(--muted); font-size: 13px; }
+.trace-steps { list-style: none; margin: 0; padding: 0; counter-reset: trace; }
+.trace-step {
+  position: relative;
+  margin-left: 11px;
+  padding: 10px 0 10px 34px;
+  border-left: 2px solid var(--line);
+}
+.trace-step::before {
+  counter-increment: trace;
+  content: counter(trace);
+  position: absolute;
+  left: -13px;
+  top: 9px;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+.trace-step:last-child { border-left-color: transparent; }
+.trace-step.target::before {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+.trace-step-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.trace-step-value { font-family: Cambria, "Times New Roman", serif; font-size: 16px; overflow-wrap: anywhere; }
+.trace-step-formula { color: var(--muted); font-family: Cambria, "Times New Roman", serif; font-size: 13px; overflow-wrap: anywhere; }
+.trace-step-tag { padding: 1px 7px; border-radius: 999px; background: #eef2f6; color: var(--muted); font-size: 11px; }
+.trace-step-tag.target-tag { background: var(--accent-soft); color: var(--accent-dark); }
+.trace-step-inputs { margin-top: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.trace-step-rewrites { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.trace-step-rewrites summary { cursor: pointer; }
+.trace-step-rewrites ol { margin: 6px 0 0; padding-left: 20px; }
+.trace-note { margin-top: 10px; color: var(--muted); font-size: 12px; }
+.trace-note.warning { color: #b4690e; }
+
 @media (max-width: 720px) {
   .app-shell { width: 100%; margin: 0; border-left: 0; border-right: 0; }
   .app-header { align-items: flex-start; flex-direction: column; padding: 18px 16px; }
@@ -318,6 +370,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         <div class="detail-block">
           <h3>直接公式</h3>
           <div id="directFormulaList"></div>
+        </div>
+        <div class="detail-block">
+          <div class="trace-heading">
+            <h3>推导过程</h3>
+            <span id="traceSummary" class="trace-summary" aria-live="polite"></span>
+          </div>
+          <div id="derivationTrace" class="trace-list"></div>
         </div>
         <div class="detail-block">
           <div class="tree-heading">
@@ -2035,6 +2094,110 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 });
 
 
+/* derivation-trace.js */
+(function (root, factory) {
+  "use strict";
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLDerivationTrace = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  /**
+   * 推导链：把一个数值「怎么一步步被造出来」线性化。
+   *
+   * 与 value-store 的 buildValueTree 的区别：
+   *  - 计算树回答「这个值由什么组成」，同一数值在不同分支会重复展开；
+   *  - 推导链回答「它是按什么顺序被造出来的」，线性、拓扑有序，
+   *    每个中间结果只推导一次，后续出现时引用其步号。
+   *
+   * 单独的步数预算（而非复用树的节点预算）：两个视图粒度不同，
+   * 共用预算会成为将来的隐性耦合。
+   */
+  const MAX_TRACE_STEPS = 500;
+
+  function buildDerivationTrace(state, valueId, options) {
+    const maxSteps = options?.maxSteps ?? MAX_TRACE_STEPS;
+    const steps = [];
+    const firstIndex = new Map();
+    const inProgress = new Set();
+    let truncated = false;
+
+    function visit(currentId) {
+      const known = firstIndex.get(currentId);
+      if (known !== undefined) {
+        const value = state.values[currentId];
+        return { valueId: currentId, displayText: value ? value.displayText : "?", refIndex: known };
+      }
+      if (inProgress.has(currentId)) {
+        // 防御性分支：EML 只能引用已存在的值，正常数据不会成环。
+        return { valueId: currentId, displayText: "?", refIndex: null, cycle: true };
+      }
+
+      const value = state.values[currentId];
+      if (!value) return { valueId: currentId, displayText: "?", refIndex: null, missing: true };
+
+      if (steps.length >= maxSteps) {
+        truncated = true;
+        return { valueId: currentId, displayText: value.displayText, refIndex: null, deferred: true };
+      }
+
+      inProgress.add(currentId);
+      const derivationId = value.derivationIds[0];
+      const derivation = derivationId ? state.derivations[derivationId] : null;
+
+      const step = {
+        valueId: currentId,
+        displayText: value.displayText,
+        kind: derivation ? "derived" : "initial",
+      };
+
+      if (derivation) {
+        step.operation = derivation.operation || "EML";
+        step.directFormula = derivation.directFormula || "";
+        step.rewriteSteps = Array.isArray(derivation.rewriteSteps) ? derivation.rewriteSteps : [];
+        // 先访问输入：后序保证任何一步被记录时，它的输入都已在前
+        step.x = visit(derivation.xValueId);
+        step.y = visit(derivation.yValueId);
+      }
+
+      inProgress.delete(currentId);
+      // 子节点可能刚好用满预算，此时不再记录当前步 ——
+      // 保证产出步数严格不超过 maxSteps（截断时链可能不完整，由 truncated 标记告知）。
+      if (steps.length >= maxSteps) {
+        truncated = true;
+        return { valueId: currentId, displayText: value.displayText, refIndex: null, deferred: true };
+      }
+      steps.push(step);
+      step.index = steps.length;
+      firstIndex.set(currentId, step.index);
+      return { valueId: currentId, displayText: value.displayText, refIndex: step.index };
+    }
+
+    const targetRef = visit(valueId);
+    if (targetRef.missing) {
+      return { ok: false, targetValueId: valueId, steps: [], truncated: false, reason: "missing-value", extraSourceCount: 0 };
+    }
+
+    for (const step of steps) step.isTarget = step.valueId === valueId;
+
+    const targetValue = state.values[valueId];
+    const extraSourceCount = targetValue ? Math.max(0, targetValue.derivationIds.length - 1) : 0;
+
+    return {
+      ok: !truncated,
+      targetValueId: valueId,
+      steps,
+      truncated,
+      reason: truncated ? "step-limit" : null,
+      extraSourceCount,
+    };
+  }
+
+  return { MAX_TRACE_STEPS, buildDerivationTrace };
+});
+
+
 /* app.js */
 (function (root) {
   "use strict";
@@ -2044,6 +2207,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const Store = root.EMLValueStore;
   const Persistence = root.EMLPersistence;
   const TreeController = root.EMLTreeController;
+  const Trace = root.EMLDerivationTrace;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -2062,6 +2226,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     detailsContent: document.getElementById("detailsContent"),
     selectedValue: document.getElementById("selectedValue"),
     directFormulaList: document.getElementById("directFormulaList"),
+    traceSummary: document.getElementById("traceSummary"),
+    derivationTrace: document.getElementById("derivationTrace"),
     calculationTreeViewport: document.getElementById("calculationTreeViewport"),
     calculationTree: document.getElementById("calculationTree"),
     treeZoomOut: document.getElementById("treeZoomOut"),
@@ -2293,6 +2459,105 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return details;
   }
 
+  /** 把输入的来源描述为「值（第 N 步）」，让复用关系一眼可见。 */
+  function describeTraceRef(ref) {
+    if (!ref) return "—";
+    const label = ref.displayText || "—";
+    if (ref.refIndex === null || ref.refIndex === undefined) return label;
+    return `${label}（第 ${ref.refIndex} 步）`;
+  }
+
+  function renderTraceStep(step) {
+    const item = document.createElement("li");
+    item.className = `trace-step ${step.kind}${step.isTarget ? " target" : ""}`;
+
+    const head = document.createElement("div");
+    head.className = "trace-step-head";
+    const value = document.createElement("strong");
+    value.className = "trace-step-value";
+    value.textContent = step.displayText;
+    head.appendChild(value);
+
+    if (step.kind === "derived") {
+      const formula = document.createElement("span");
+      formula.className = "trace-step-formula";
+      formula.textContent = step.directFormula;
+      head.appendChild(formula);
+    } else {
+      const tag = document.createElement("span");
+      tag.className = "trace-step-tag";
+      tag.textContent = "初始值";
+      head.appendChild(tag);
+    }
+    if (step.isTarget) {
+      const tag = document.createElement("span");
+      tag.className = "trace-step-tag target-tag";
+      tag.textContent = "目标";
+      head.appendChild(tag);
+    }
+    item.appendChild(head);
+
+    if (step.kind === "derived") {
+      const inputs = document.createElement("div");
+      inputs.className = "trace-step-inputs";
+      inputs.textContent = `x = ${describeTraceRef(step.x)} · y = ${describeTraceRef(step.y)}`;
+      item.appendChild(inputs);
+
+      if (step.rewriteSteps && step.rewriteSteps.length) {
+        const details = document.createElement("details");
+        details.className = "trace-step-rewrites";
+        const summary = document.createElement("summary");
+        summary.textContent = `化简 ${step.rewriteSteps.length} 步`;
+        details.appendChild(summary);
+        const list = document.createElement("ol");
+        for (const rewrite of step.rewriteSteps) {
+          const row = document.createElement("li");
+          row.textContent = `${rewrite.before} → ${rewrite.after}`;
+          list.appendChild(row);
+        }
+        details.appendChild(list);
+        item.appendChild(details);
+      }
+    }
+    return item;
+  }
+
+  function renderTrace() {
+    const trace = Trace.buildDerivationTrace(state, state.selectedValueId, { maxSteps: Trace.MAX_TRACE_STEPS });
+    elements.derivationTrace.replaceChildren();
+
+    if (!trace.ok && trace.reason === "missing-value") {
+      elements.traceSummary.textContent = "";
+      const empty = document.createElement("div");
+      empty.className = "empty-formulas";
+      empty.textContent = "找不到该数值的推导记录。";
+      elements.derivationTrace.appendChild(empty);
+      return;
+    }
+
+    elements.traceSummary.textContent = trace.truncated
+      ? `已截断（前 ${trace.steps.length} 步）`
+      : `共 ${trace.steps.length} 步`;
+
+    const list = document.createElement("ol");
+    list.className = "trace-steps";
+    for (const step of trace.steps) list.appendChild(renderTraceStep(step));
+    elements.derivationTrace.appendChild(list);
+
+    if (trace.extraSourceCount > 0) {
+      const note = document.createElement("div");
+      note.className = "trace-note";
+      note.textContent = `该数值另有 ${trace.extraSourceCount} 条来源公式，此处展示最早推出来的那条。`;
+      elements.derivationTrace.appendChild(note);
+    }
+    if (trace.truncated) {
+      const note = document.createElement("div");
+      note.className = "trace-note warning";
+      note.textContent = "推导链超过展示上限，已截断。";
+      elements.derivationTrace.appendChild(note);
+    }
+  }
+
   function renderDetails() {
     const details = Store.getDetails(state, state.selectedValueId, {
       maxDepth: treeDepth,
@@ -2323,6 +2588,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         elements.directFormulaList.appendChild(row);
       }
     }
+
+    // 推导过程：线性列出从初始值到当前选中值的建造顺序
+    renderTrace();
 
     if (details.tree.derivations.length === 0) {
       const root = document.createElement("div");

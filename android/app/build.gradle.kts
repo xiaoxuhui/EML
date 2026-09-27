@@ -11,8 +11,8 @@ android {
         applicationId = "com.xiaoxuhui.eml"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2.1"
+        versionCode = 4
+        versionName = "1.3.0"
 
         // 应用为单语言中文工具，去掉无用资源以减小体积
         resourceConfigurations += listOf("zh", "en")

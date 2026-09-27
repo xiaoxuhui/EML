@@ -20,6 +20,7 @@ const scriptFiles = [
   "persistence.js",
   "tree-viewport.js",
   "tree-controller.js",
+  "derivation-trace.js",
   "app.js",
 ];
 const scripts = scriptFiles

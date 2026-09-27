@@ -6,6 +6,7 @@
   const Store = root.EMLValueStore;
   const Persistence = root.EMLPersistence;
   const TreeController = root.EMLTreeController;
+  const Trace = root.EMLDerivationTrace;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -24,6 +25,8 @@
     detailsContent: document.getElementById("detailsContent"),
     selectedValue: document.getElementById("selectedValue"),
     directFormulaList: document.getElementById("directFormulaList"),
+    traceSummary: document.getElementById("traceSummary"),
+    derivationTrace: document.getElementById("derivationTrace"),
     calculationTreeViewport: document.getElementById("calculationTreeViewport"),
     calculationTree: document.getElementById("calculationTree"),
     treeZoomOut: document.getElementById("treeZoomOut"),
@@ -255,6 +258,105 @@
     return details;
   }
 
+  /** 把输入的来源描述为「值（第 N 步）」，让复用关系一眼可见。 */
+  function describeTraceRef(ref) {
+    if (!ref) return "—";
+    const label = ref.displayText || "—";
+    if (ref.refIndex === null || ref.refIndex === undefined) return label;
+    return `${label}（第 ${ref.refIndex} 步）`;
+  }
+
+  function renderTraceStep(step) {
+    const item = document.createElement("li");
+    item.className = `trace-step ${step.kind}${step.isTarget ? " target" : ""}`;
+
+    const head = document.createElement("div");
+    head.className = "trace-step-head";
+    const value = document.createElement("strong");
+    value.className = "trace-step-value";
+    value.textContent = step.displayText;
+    head.appendChild(value);
+
+    if (step.kind === "derived") {
+      const formula = document.createElement("span");
+      formula.className = "trace-step-formula";
+      formula.textContent = step.directFormula;
+      head.appendChild(formula);
+    } else {
+      const tag = document.createElement("span");
+      tag.className = "trace-step-tag";
+      tag.textContent = "初始值";
+      head.appendChild(tag);
+    }
+    if (step.isTarget) {
+      const tag = document.createElement("span");
+      tag.className = "trace-step-tag target-tag";
+      tag.textContent = "目标";
+      head.appendChild(tag);
+    }
+    item.appendChild(head);
+
+    if (step.kind === "derived") {
+      const inputs = document.createElement("div");
+      inputs.className = "trace-step-inputs";
+      inputs.textContent = `x = ${describeTraceRef(step.x)} · y = ${describeTraceRef(step.y)}`;
+      item.appendChild(inputs);
+
+      if (step.rewriteSteps && step.rewriteSteps.length) {
+        const details = document.createElement("details");
+        details.className = "trace-step-rewrites";
+        const summary = document.createElement("summary");
+        summary.textContent = `化简 ${step.rewriteSteps.length} 步`;
+        details.appendChild(summary);
+        const list = document.createElement("ol");
+        for (const rewrite of step.rewriteSteps) {
+          const row = document.createElement("li");
+          row.textContent = `${rewrite.before} → ${rewrite.after}`;
+          list.appendChild(row);
+        }
+        details.appendChild(list);
+        item.appendChild(details);
+      }
+    }
+    return item;
+  }
+
+  function renderTrace() {
+    const trace = Trace.buildDerivationTrace(state, state.selectedValueId, { maxSteps: Trace.MAX_TRACE_STEPS });
+    elements.derivationTrace.replaceChildren();
+
+    if (!trace.ok && trace.reason === "missing-value") {
+      elements.traceSummary.textContent = "";
+      const empty = document.createElement("div");
+      empty.className = "empty-formulas";
+      empty.textContent = "找不到该数值的推导记录。";
+      elements.derivationTrace.appendChild(empty);
+      return;
+    }
+
+    elements.traceSummary.textContent = trace.truncated
+      ? `已截断（前 ${trace.steps.length} 步）`
+      : `共 ${trace.steps.length} 步`;
+
+    const list = document.createElement("ol");
+    list.className = "trace-steps";
+    for (const step of trace.steps) list.appendChild(renderTraceStep(step));
+    elements.derivationTrace.appendChild(list);
+
+    if (trace.extraSourceCount > 0) {
+      const note = document.createElement("div");
+      note.className = "trace-note";
+      note.textContent = `该数值另有 ${trace.extraSourceCount} 条来源公式，此处展示最早推出来的那条。`;
+      elements.derivationTrace.appendChild(note);
+    }
+    if (trace.truncated) {
+      const note = document.createElement("div");
+      note.className = "trace-note warning";
+      note.textContent = "推导链超过展示上限，已截断。";
+      elements.derivationTrace.appendChild(note);
+    }
+  }
+
   function renderDetails() {
     const details = Store.getDetails(state, state.selectedValueId, {
       maxDepth: treeDepth,
@@ -285,6 +387,9 @@
         elements.directFormulaList.appendChild(row);
       }
     }
+
+    // 推导过程：线性列出从初始值到当前选中值的建造顺序
+    renderTrace();
 
     if (details.tree.derivations.length === 0) {
       const root = document.createElement("div");

@@ -242,6 +242,58 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .tree-label { font-family: Cambria, "Times New Roman", serif; font-weight: 600; }
 .rewrite-steps { color: var(--muted); font-size: 13px; }
 
+/* 推导过程：从初始值到当前数值的线性建造顺序 */
+.trace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.trace-heading h3 { margin: 0; }
+.trace-summary { color: var(--muted); font-size: 13px; }
+.trace-steps { list-style: none; margin: 0; padding: 0; counter-reset: trace; }
+.trace-step {
+  position: relative;
+  margin-left: 11px;
+  padding: 10px 0 10px 34px;
+  border-left: 2px solid var(--line);
+}
+.trace-step::before {
+  counter-increment: trace;
+  content: counter(trace);
+  position: absolute;
+  left: -13px;
+  top: 9px;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+.trace-step:last-child { border-left-color: transparent; }
+.trace-step.target::before {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+.trace-step-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.trace-step-value { font-family: Cambria, "Times New Roman", serif; font-size: 16px; overflow-wrap: anywhere; }
+.trace-step-formula { color: var(--muted); font-family: Cambria, "Times New Roman", serif; font-size: 13px; overflow-wrap: anywhere; }
+.trace-step-tag { padding: 1px 7px; border-radius: 999px; background: #eef2f6; color: var(--muted); font-size: 11px; }
+.trace-step-tag.target-tag { background: var(--accent-soft); color: var(--accent-dark); }
+.trace-step-inputs { margin-top: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.trace-step-rewrites { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.trace-step-rewrites summary { cursor: pointer; }
+.trace-step-rewrites ol { margin: 6px 0 0; padding-left: 20px; }
+.trace-note { margin-top: 10px; color: var(--muted); font-size: 12px; }
+.trace-note.warning { color: #b4690e; }
+
 @media (max-width: 720px) {
   .app-shell { width: 100%; margin: 0; border-left: 0; border-right: 0; }
   .app-header { align-items: flex-start; flex-direction: column; padding: 18px 16px; }
