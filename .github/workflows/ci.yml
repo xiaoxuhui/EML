@@ -21,11 +21,20 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run tests
-        run: npm test
-
+      # 先构建：下面的 assets 同步依赖 dist 产物。
       - name: Build single-file bundle
         run: npm run build
+
+      # android/app/src/main/assets/ 是构建产物、被 .gitignore 排除，CI 检出后并不存在；
+      # 而测试里有一条断言「assets 与 dist 字节一致」。缺这一步时 CI 必然失败，
+      # 且失败信息看起来像「测试本身坏了」，真实原因却是「少了一步生成」。
+      # 本地开发时开发者自己 sync 过，所以这个坑只在 CI 暴露
+      # —— 2026-09-11 起 CI 连续失败即由此而来。
+      - name: Sync android assets
+        run: node scripts/sync-android-assets.mjs
+
+      - name: Run tests
+        run: npm test
 
       - name: Verify dist artifact exists
         run: test -f dist/eml-workbench.html
