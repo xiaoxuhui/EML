@@ -4,16 +4,20 @@
  * 这些用例不需要 Android 工具链即可运行，用于在 CI 里守住：
  * 应用身份（包名/版本/SDK）、离线要求（无网络权限）、
  * 网页资源同步（U03）、图标与关键 WebView 配置不丢失。
+ *
+ * 模块系统：必须是 CommonJS。package.json 没有声明 "type"，所以 .js 一律按 CJS 解析；
+ * 而 CI 矩阵含 Node 18（README 对外承诺支持 18/20/22），Node 18 不会像 20.19+/22 那样
+ * 自动探测 ESM 语法 —— 这里写成 `import` 会直接在 Node 18 上抛
+ * 「Cannot use import statement outside a module」，而本地 Node 22 完全看不出来。
  */
 
-import { test } from "node:test";
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { readFile } = require("node:fs/promises");
+const { existsSync } = require("node:fs");
+const path = require("node:path");
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(__dirname, "..");
 const ANDROID = path.join(ROOT, "android");
 const APP = path.join(ANDROID, "app", "src", "main");
 

@@ -11,6 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        # 18 是 README 对外承诺的支持版本，不能因为「本地跑不到」就删矩阵
+        # —— 它恰恰是唯一能暴露「测试文件误用 ESM 语法」的环境：
+        # package.json 没有声明 "type"，.js 一律按 CommonJS 解析，而 Node 18
+        # 不具备 20.19+/22 的模块自动探测能力，测试文件里写 `import` 会在
+        # 18 上直接抛「Cannot use import statement outside a module」，
+        # 本地 Node 22 却完全正常（2026-09-27 android-shell.test.js 即此坑）。
+        # 凡只在 Node 22 上验证过的改动，都要想到这一行。
         node-version: [18, 20, 22]
     steps:
       - name: Checkout
