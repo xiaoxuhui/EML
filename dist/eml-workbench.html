@@ -1098,13 +1098,14 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Properties) {
   "use strict";
 
-  const { TYPES, ONE, ZERO, I, integer, neg, add, mul, isSame, isInteger, isConstant } = Expr;
+  const { TYPES, ONE, ZERO, I, integer, neg, add, sub, mul, isSame, isInteger, isConstant } = Expr;
   const { isProvablyNonZero } = Properties;
 
   const rules = [
     { id: "NEG_INTEGER", label: "负整数化简" },
     { id: "NEG_DOUBLE", label: "-(-a) = a" },
     { id: "NEG_DIV", label: "-(a / b) = (-a) / b" },
+    { id: "NEG_SUB", label: "-(a - b) = b - a" },
     { id: "INTEGER_ADD", label: "整数加法" },
     { id: "INTEGER_SUB", label: "整数减法" },
     { id: "INTEGER_MUL", label: "整数乘法" },
@@ -1115,9 +1116,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     { id: "SUB_SELF", label: "a - a = 0" },
     { id: "SUB_NESTED_LEFT", label: "a - (a - b) = b" },
     { id: "SUB_NESTED_RIGHT", label: "(a - b) - a = -b" },
+    { id: "SUB_NESTED_SAME_LEFT", label: "(a - b) - (a - c) = c - b" },
     { id: "SUB_NEGATIVE", label: "a - (-b) = a + b" },
     { id: "SUB_ADDED_LEFT", label: "a - (a + b) = -b" },
     { id: "SUB_ADDED_CANCEL", label: "(a + b) - a = b" },
+    { id: "SUB_NESTED_FOLD", label: "a - (b - c) 折叠为可合并整数的形式" },
+    { id: "SUB_SUM_FOLD", label: "a - (b + c) 折叠为可合并整数的形式" },
     { id: "MUL_ONE", label: "a × 1 = a" },
     { id: "MUL_ZERO", label: "a × 0 = 0" },
     { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
@@ -1142,6 +1146,15 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       return {
         expression: Expr.div(neg(expression.child.numerator), expression.child.denominator),
         ruleId: "NEG_DIV",
+      };
+    }
+    // -(a - b) = b - a
+    // 缺少这条时，-(e - 1) 之类的表达式会原地不动（0 步重写），
+    // 从而卡住所有依赖它的后续合并。
+    if (expression.type === TYPES.NEG && expression.child.type === TYPES.SUB) {
+      return {
+        expression: sub(expression.child.right, expression.child.left),
+        ruleId: "NEG_SUB",
       };
     }
 
@@ -1194,6 +1207,41 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         }
         if (isSame(expression.left.right, expression.right)) {
           return { expression: expression.left.left, ruleId: "SUB_ADDED_CANCEL" };
+        }
+      }
+      // (a - b) - (a - c) = c - b
+      if (
+        expression.left.type === TYPES.SUB && expression.right.type === TYPES.SUB &&
+        isSame(expression.left.left, expression.right.left)
+      ) {
+        return {
+          expression: sub(expression.right.right, expression.left.right),
+          ruleId: "SUB_NESTED_SAME_LEFT",
+        };
+      }
+      // a - (b - c) = a - b + c
+      //
+      // 只有当 a 与 c（或 a 与 b）同为整数、能立刻算出整数结果时才改写：
+      // 否则会产出 (x + z) - y 这种「长度不变、没有更简」的形式，反而污染化简步骤。
+      // 例：1 - (e - 1) → (1 + 1) - e → 2 - e
+      if (expression.right.type === TYPES.SUB) {
+        const [minuend, innerLeft, innerRight] = [expression.left, expression.right.left, expression.right.right];
+        if (minuend.type === TYPES.INTEGER && innerRight.type === TYPES.INTEGER) {
+          return { expression: sub(add(minuend, innerRight), innerLeft), ruleId: "SUB_NESTED_FOLD" };
+        }
+        if (minuend.type === TYPES.INTEGER && innerLeft.type === TYPES.INTEGER) {
+          return { expression: add(sub(minuend, innerLeft), innerRight), ruleId: "SUB_NESTED_FOLD" };
+        }
+      }
+      // a - (b + c) = a - b - c（同样只在能立刻合并整数时改写）
+      // 例：2 - (e + 1) → (2 - 1) - e → 1 - e
+      if (expression.right.type === TYPES.ADD) {
+        const [minuend, innerLeft, innerRight] = [expression.left, expression.right.left, expression.right.right];
+        if (minuend.type === TYPES.INTEGER && innerLeft.type === TYPES.INTEGER) {
+          return { expression: sub(sub(minuend, innerLeft), innerRight), ruleId: "SUB_SUM_FOLD" };
+        }
+        if (minuend.type === TYPES.INTEGER && innerRight.type === TYPES.INTEGER) {
+          return { expression: sub(sub(minuend, innerRight), innerLeft), ruleId: "SUB_SUM_FOLD" };
         }
       }
     }

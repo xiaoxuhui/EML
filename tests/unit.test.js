@@ -575,3 +575,83 @@ test("复数乘法计算树中的负号显示无歧义", () => {
   assert.equal(Expr.render(nestedProduct), "-(i × iπ)");
   assert.equal(Expr.render(doubleNegative), "-(-π)");
 });
+
+// ─────────────────────────────────────────────────────────────
+// 减法去括号规则族（v1.3.0）
+//
+// 背景：化简器原本对「减法嵌套 / 去括号」整族失明 —— `1 - (e - 1)` 这类表达式
+// 会 0 步重写、原地不动。根因是规则库只有匹配相同子式的特例规则
+// （`SUB_NESTED_LEFT`：a - (a - b) = b），缺少通用的去括号规则，
+// 于是任何「被减数与内层不相等」的嵌套减法都卡死。
+// ─────────────────────────────────────────────────────────────
+
+test("回归：a - (b - c) 去括号后可继续合并整数", () => {
+  const cases = [
+    [Expr.sub(Expr.ONE, Expr.sub(Expr.E, Expr.ONE)), "2 - e"],
+    [Expr.sub(Expr.integer(2), Expr.sub(Expr.E, Expr.ONE)), "3 - e"],
+    [Expr.sub(Expr.ONE, Expr.sub(Expr.E, Expr.integer(2))), "3 - e"],
+    [Expr.sub(Expr.ZERO, Expr.sub(Expr.E, Expr.ONE)), "1 - e"],
+    // 被减数与内层减数同为整数时改走 (a - b) + c，否则会卡在「2 + e - 1」
+    [Expr.sub(Expr.integer(2), Expr.sub(Expr.ONE, Expr.E)), "1 + e"],
+    // 多重嵌套需要两轮折叠
+    [Expr.sub(Expr.ONE, Expr.sub(Expr.sub(Expr.E, Expr.ONE), Expr.ONE)), "3 - e"],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(Expr.render(Rules.simplify(input).expression), expected, Expr.render(input));
+  }
+});
+
+test("回归：-(a - b) 化为 b - a", () => {
+  assert.equal(Expr.render(Rules.simplify(Expr.neg(Expr.sub(Expr.E, Expr.ONE))).expression), "1 - e");
+  assert.equal(Expr.render(Rules.simplify(Expr.neg(Expr.sub(Expr.ONE, Expr.E))).expression), "e - 1");
+});
+
+test("回归：(a - b) - (a - c) 化为 c - b", () => {
+  const result = Rules.simplify(Expr.sub(Expr.sub(Expr.E, Expr.ONE), Expr.sub(Expr.E, Expr.integer(2))));
+  assert.equal(Expr.render(result.expression), "1");
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_SAME_LEFT"));
+});
+
+test("回归：a - (b + c) 去括号后可继续合并整数", () => {
+  const result = Rules.simplify(Expr.sub(Expr.integer(2), Expr.add(Expr.E, Expr.ONE)));
+  assert.equal(Expr.render(result.expression), "1 - e");
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_SUM_FOLD"));
+});
+
+test("减法去括号只在能立刻合并整数时改写", () => {
+  // 全符号情形得不到更简的形式，应保持原样：
+  // 否则只是等长改写（π - (i - e) → (π + e) - i），白白污染化简步骤。
+  const symbolic = Rules.simplify(Expr.sub(Expr.PI, Expr.sub(Expr.I, Expr.E)));
+  assert.equal(Expr.render(symbolic.expression), "π - (i - e)");
+  assert.equal(symbolic.steps.length, 0);
+
+  // 已有特例规则覆盖的场景仍走原规则，保持更短路径
+  assert.ok(
+    Rules.simplify(Expr.sub(Expr.E, Expr.sub(Expr.E, Expr.ONE))).steps
+      .some((step) => step.ruleId === "SUB_NESTED_LEFT")
+  );
+  assert.ok(
+    Rules.simplify(Expr.sub(Expr.ONE, Expr.add(Expr.E, Expr.ONE))).steps
+      .some((step) => step.ruleId === "SUB_ADDED_LEFT")
+  );
+});
+
+test("减法去括号不改变原表达式的数值", () => {
+  // 用复数近似值交叉验证改写前后的值：代数推导若写错，这里会立刻暴露
+  const cases = [
+    Expr.sub(Expr.ONE, Expr.sub(Expr.E, Expr.ONE)),
+    Expr.neg(Expr.sub(Expr.E, Expr.ONE)),
+    Expr.sub(Expr.integer(2), Expr.sub(Expr.ONE, Expr.E)),
+    Expr.sub(Expr.sub(Expr.E, Expr.ONE), Expr.sub(Expr.E, Expr.integer(2))),
+    Expr.sub(Expr.integer(2), Expr.add(Expr.E, Expr.ONE)),
+    Expr.sub(Expr.PI, Expr.sub(Expr.I, Expr.E)),
+    Expr.neg(Expr.sub(Expr.mul(Expr.I, Expr.PI), Expr.E)),
+  ];
+  for (const input of cases) {
+    const before = Expr.approximate(input);
+    const after = Expr.approximate(Rules.simplify(input).expression);
+    assert.ok(before && after, `近似值不可用：${Expr.render(input)}`);
+    assert.ok(Math.abs(before.re - after.re) < 1e-9, `实部不一致：${Expr.render(input)}`);
+    assert.ok(Math.abs(before.im - after.im) < 1e-9, `虚部不一致：${Expr.render(input)}`);
+  }
+});
