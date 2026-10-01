@@ -5,7 +5,7 @@
 
 - 包名：`com.xiaoxuhui.eml`
 - 应用名：EML 计算台
-- 版本：1.2.1（versionCode 3）
+- 版本：1.3.0（versionCode 4）
 - minSdk 24（Android 7.0）/ targetSdk 34
 - 权限：**无**（完全离线，不申请网络权限）
 

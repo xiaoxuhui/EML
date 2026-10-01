@@ -108,6 +108,25 @@ test("版本号与网页版同线且 versionCode 已递增（防止装不上新�
   );
 });
 
+/**
+ * android/README.md 的版本行不参与构建，因而最容易在升版时被漏掉 ——
+ * v1.3.0 升级时就漏了一次（README 里还留着 1.2.1）。它是给人看的入口说明，
+ * 写着旧版号会让人以为装错了包，所以也把它和 build.gradle.kts 绑在一起。
+ */
+test("android/README 的版本行与 build.gradle.kts 保持同步", async () => {
+  const gradle = await read(path.join(ANDROID, "app", "build.gradle.kts"));
+  const readme = await read(path.join(ANDROID, "README.md"));
+
+  const versionCode = (gradle.match(/versionCode\s*=\s*(\d+)/) || [])[1];
+  const versionName = (gradle.match(/versionName\s*=\s*"([^"]+)"/) || [])[1];
+  assert.ok(versionCode && versionName, "未能从 build.gradle.kts 读出 versionCode / versionName");
+
+  assert.ok(
+    readme.includes(`- 版本：${versionName}（versionCode ${versionCode}）`),
+    `android/README.md 应写成「- 版本：${versionName}（versionCode ${versionCode}）」，升版时别漏了它`,
+  );
+});
+
 test("应用显示名为「EML 计算台」", async () => {
   const strings = await read(path.join(APP, "res", "values", "strings.xml"));
   assert.match(strings, /<string name="app_name">EML 计算台<\/string>/);
