@@ -20,7 +20,8 @@
   function renderBody(node) {
     if (node.type === "parameter") return node.name;
     if (node.type === "constant") return node.displayText;
-    return `EML(${renderBody(node.left)}, ${renderBody(node.right)})`;
+    if (node.type === "eml") return `EML(${renderBody(node.left)}, ${renderBody(node.right)})`;
+    return `${node.name}(${node.arguments.map(renderBody).join(", ")})`;
   }
 
   function renderDefinition(definition) {
@@ -89,25 +90,31 @@
       if (token === "e") return { node: { type: "constant", expression: Expr.E, displayText: "e" } };
       if (token === "i") return { node: { type: "constant", expression: Expr.I, displayText: "i" } };
       if (token === "pi") return { node: { type: "constant", expression: Expr.PI, displayText: "π" } };
-      if (token !== "EML") {
-        if (!parameterNames.includes(token)) return { error: `参数 ${token} 未声明。` };
+      if (!consume("(")) {
+        if (!parameterNames.includes(token)) return { error: `参数或函数 ${token} 未声明。` };
         return { node: { type: "parameter", name: token } };
       }
-      if (!consume("(")) return { error: "EML 后需要左括号。" };
-      const left = parseBody(depth + 1);
-      if (left.error) return left;
-      if (!consume(",")) return { error: "EML 的两个参数之间需要逗号。" };
-      const right = parseBody(depth + 1);
-      if (right.error) return right;
-      if (!consume(")")) return { error: "EML 调用缺少右括号。" };
-      return { node: { type: "eml", left: left.node, right: right.node } };
+      const argumentsList = [];
+      while (true) {
+        const argument = parseBody(depth + 1);
+        if (argument.error) return argument;
+        argumentsList.push(argument.node);
+        if (consume(")")) break;
+        if (!consume(",")) return { error: `${token} 的参数之间需要逗号。` };
+      }
+      if (token === "EML") {
+        if (argumentsList.length !== 2) return { error: "EML 需要两个参数。" };
+        return { node: { type: "eml", left: argumentsList[0], right: argumentsList[1] } };
+      }
+      if (parameterNames.includes(token)) return { error: `参数 ${token} 不能作为函数调用。` };
+      return { node: { type: "call", name: token, arguments: argumentsList } };
     }
 
     const body = parseBody(1);
     if (body.error) return fail(body.error);
     skipWhitespace();
     if (index !== source.length) return fail("函数定义末尾存在无法识别的内容。");
-    if (body.node.type !== "eml") return fail("函数体至少需要一个 EML 调用。");
+    if (!["eml", "call"].includes(body.node.type)) return fail("函数体至少需要一个 EML 或已定义函数调用。");
 
     const definition = { name, parameterNames, body: body.node };
     const displayText = renderDefinition(definition);
@@ -117,7 +124,41 @@
     };
   }
 
-  function evaluate(definition, inputExpressions) {
+  function definitionMap(definitions) {
+    if (definitions instanceof Map) return definitions;
+    return new Map((Array.isArray(definitions) ? definitions : []).map((item) => [item.name, item]));
+  }
+
+  function validateDefinitionCalls(definition, definitions) {
+    const available = definitionMap(definitions);
+    let error = "";
+    function visit(node) {
+      if (error || node.type === "parameter" || node.type === "constant") return;
+      if (node.type === "eml") {
+        visit(node.left);
+        visit(node.right);
+        return;
+      }
+      if (node.name === definition.name) {
+        error = `函数 ${definition.name} 不能调用自身。`;
+        return;
+      }
+      const target = available.get(node.name);
+      if (!target) {
+        error = `函数 ${node.name} 尚未定义。`;
+        return;
+      }
+      if (target.parameterNames.length !== node.arguments.length) {
+        error = `函数 ${node.name} 需要 ${target.parameterNames.length} 个参数。`;
+        return;
+      }
+      node.arguments.forEach(visit);
+    }
+    visit(definition.body);
+    return error ? { ok: false, error } : { ok: true };
+  }
+
+  function evaluate(definition, inputExpressions, definitions, callStack = new Set()) {
     if (!definition || !Array.isArray(definition.parameterNames) || !definition.body) {
       return { ok: false, error: "函数定义无效。" };
     }
@@ -128,10 +169,28 @@
       return { ok: false, error: "函数输入无效。" };
     }
     const inputs = new Map(definition.parameterNames.map((name, index) => [name, inputExpressions[index]]));
+    const available = definitionMap(definitions);
 
     function evaluateNode(node) {
       if (node.type === "parameter") return { ok: true, expression: inputs.get(node.name), rewriteSteps: [], limitReached: false };
       if (node.type === "constant") return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false };
+      if (node.type === "call") {
+        const target = available.get(node.name);
+        if (!target) return { ok: false, error: `函数 ${node.name} 尚未定义。` };
+        if (callStack.has(node.name)) return { ok: false, error: "函数调用存在循环引用。" };
+        const argumentsResult = node.arguments.map(evaluateNode);
+        const failed = argumentsResult.find((result) => !result.ok);
+        if (failed) return failed;
+        const nested = evaluate(target, argumentsResult.map((result) => result.expression), available, new Set([...callStack, definition.name]));
+        if (!nested.ok) return nested;
+        return {
+          ok: true,
+          expression: nested.resultExpression,
+          rawExpression: nested.rawExpression,
+          rewriteSteps: [...argumentsResult.flatMap((result) => result.rewriteSteps), ...nested.rewriteSteps],
+          limitReached: argumentsResult.some((result) => result.limitReached) || nested.limitReached,
+        };
+      }
       const left = evaluateNode(node.left);
       if (!left.ok) return left;
       const right = evaluateNode(node.right);
@@ -175,6 +234,7 @@
     MAX_DEFINITION_LENGTH,
     IDENTIFIER,
     parseDefinition,
+    validateDefinitionCalls,
     renderBody,
     renderDefinition,
     evaluate,

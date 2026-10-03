@@ -84,3 +84,23 @@ test("MF03-MF06 支持多个函数、独立输入和删除定义", () => {
   state = Store.deleteCustomFunction(state, fState.id).state;
   assert.deepEqual(Store.getCustomFunctions(state).map((item) => item.name), ["g"]);
 });
+
+test("MF09 已定义函数可被新函数调用并展开求值", () => {
+  const f = Composition.parseDefinition("f(x) = EML(x, 1)").definition;
+  const g = Composition.parseDefinition("g(x) = f(x)").definition;
+  assert.deepEqual(Composition.validateDefinitionCalls(g, [f]), { ok: true });
+  const result = Composition.evaluate(g, [Expr.ONE], [f, g]);
+  assert.equal(result.ok, true);
+  assert.equal(result.displayText, "e");
+  assert.equal(result.directFormula, "g(1) = e");
+});
+
+test("MF10 拒绝未定义函数、自引用和参数数量不匹配", () => {
+  const f = Composition.parseDefinition("f(x) = EML(x, 1)").definition;
+  const unknown = Composition.parseDefinition("g(x) = h(x)").definition;
+  const self = Composition.parseDefinition("g(x) = g(x)").definition;
+  const wrongArity = Composition.parseDefinition("g(x) = f(x, 1)").definition;
+  assert.equal(Composition.validateDefinitionCalls(unknown, [f]).ok, false);
+  assert.equal(Composition.validateDefinitionCalls(self, [f]).ok, false);
+  assert.equal(Composition.validateDefinitionCalls(wrongArity, [f]).ok, false);
+});

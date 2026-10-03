@@ -136,6 +136,10 @@
   function renderCustomCalculators() {
     elements.customFunctionApplications.replaceChildren();
     const functions = Store.getCustomFunctions(state);
+    const definitions = functions
+      .map((custom) => Composition.parseDefinition(custom.definitionText))
+      .filter((parsed) => parsed.ok)
+      .map((parsed) => parsed.definition);
     for (const custom of functions) {
       const parsed = Composition.parseDefinition(custom.definitionText);
       if (!parsed.ok) continue;
@@ -174,7 +178,7 @@
       const result = document.createElement("output");
       result.className = "result-slot";
       const inputs = custom.inputValueIds.map(currentValue);
-      const evaluation = inputs.some((value) => !value) ? null : Composition.evaluate(definition, inputs.map((value) => value.canonicalExpression));
+      const evaluation = inputs.some((value) => !value) ? null : Composition.evaluate(definition, inputs.map((value) => value.canonicalExpression), definitions);
       result.textContent = !evaluation ? "?" : !evaluation.ok ? "未定义" : evaluation.displayText;
       result.classList.toggle("error", Boolean(evaluation && (!evaluation.ok || evaluation.limitReached)));
       line.appendChild(result);
@@ -540,6 +544,16 @@
     const parsed = Composition.parseDefinition(elements.customDefinition.value);
     if (!parsed.ok) {
       customDefinitionError = parsed.error;
+      render();
+      return;
+    }
+    const existingDefinitions = Store.getCustomFunctions(state)
+      .map((custom) => Composition.parseDefinition(custom.definitionText))
+      .filter((existing) => existing.ok)
+      .map((existing) => existing.definition);
+    const callValidation = Composition.validateDefinitionCalls(parsed.definition, existingDefinitions);
+    if (!callValidation.ok) {
+      customDefinitionError = callValidation.error;
       render();
       return;
     }
