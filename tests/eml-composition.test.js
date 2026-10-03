@@ -69,3 +69,18 @@ test("UCF07 相同组合定义和输入不重复保存", () => {
   );
   assert.equal(duplicate.status, "duplicate-formula");
 });
+
+test("MF03-MF06 支持多个函数、独立输入和删除定义", () => {
+  let state = Store.createInitialState();
+  const f = Composition.parseDefinition("f(x) = EML(x, 1)").definition;
+  const g = Composition.parseDefinition("g(x) = EML(x, 1)").definition;
+  state = Store.addCustomFunction(state, f.name, f.displayText, 1).state;
+  state = Store.addCustomFunction(state, g.name, g.displayText, 1).state;
+  const [fState, gState] = Store.getCustomFunctions(state);
+  state = Store.setCustomInput(state, fState.id, 0, Store.initialValueId);
+  assert.equal(Store.getCustomFunctions(state)[0].inputValueIds[0], Store.initialValueId);
+  assert.equal(Store.getCustomFunctions(state)[1].inputValueIds[0], null);
+  assert.equal(Store.addCustomFunction(state, f.name, f.displayText, 1).status, "duplicate-name");
+  state = Store.deleteCustomFunction(state, fState.id).state;
+  assert.deepEqual(Store.getCustomFunctions(state).map((item) => item.name), ["g"]);
+});

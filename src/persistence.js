@@ -22,6 +22,15 @@
     typeof value === "string" && value.length <= maximum
   );
 
+  function migrateCustomFunctions(candidate) {
+    const next = JSON.parse(JSON.stringify(candidate));
+    if (!Array.isArray(next.customFunctions)) {
+      next.customFunctions = ValueStore.getCustomFunctions(next);
+    }
+    delete next.customFunction;
+    return next;
+  }
+
   function hasDependencyCycle(state) {
     const visiting = new Set();
     const visited = new Set();
@@ -44,6 +53,7 @@
   }
 
   function validateState(candidate) {
+    candidate = migrateCustomFunctions(candidate);
     if (!candidate || candidate.schemaVersion !== 2) return { ok: false, error: "不支持的数据版本" };
     if (!candidate.values || typeof candidate.values !== "object") return { ok: false, error: "缺少数值数据" };
     if (!candidate.derivations || typeof candidate.derivations !== "object") return { ok: false, error: "缺少公式数据" };
@@ -113,11 +123,15 @@
       return { ok: false, error: "选择状态引用了不存在的数值" };
     }
 
-    if (candidate.customFunction !== undefined) {
-      const custom = candidate.customFunction;
+    if (!Array.isArray(candidate.customFunctions) || new Set(candidate.customFunctions.map((item) => item?.id)).size !== candidate.customFunctions.length) {
+      return { ok: false, error: "组合函数状态无效" };
+    }
+    if (new Set(candidate.customFunctions.map((item) => item?.name)).size !== candidate.customFunctions.length) return { ok: false, error: "函数名称存在重复" };
+    for (const custom of candidate.customFunctions) {
       if (
-        !custom || !isShortString(custom.definitionText, 1000) ||
-        !Array.isArray(custom.inputValueIds) || custom.inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
+        !custom || !isShortString(custom.id, 120) || !/^[A-Za-z][A-Za-z0-9_]*$/.test(custom.name) ||
+        !isShortString(custom.definitionText, 1000) || !Array.isArray(custom.inputValueIds) ||
+        custom.inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
         custom.inputValueIds.some((valueId) => valueId !== null && !candidate.values[valueId])
       ) return { ok: false, error: "组合函数状态无效" };
     }

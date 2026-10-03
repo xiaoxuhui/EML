@@ -55,10 +55,16 @@ test("导入文本大小受到限制", () => {
   assert.equal(Persistence.deserialize(" ".repeat(Persistence.MAX_IMPORT_BYTES + 1)).error, "文件大小超过限制");
 });
 
-test("UCF09 旧 V2 保存文件和组合函数来源均可校验", () => {
+test("UCF09 与 MF07-MF08：旧保存文件和单函数状态可迁移", () => {
   const oldState = Store.createInitialState();
-  delete oldState.customFunction;
   assert.equal(Persistence.validateState(oldState).ok, true);
+
+  const legacy = Store.createInitialState();
+  delete legacy.customFunctions;
+  legacy.customFunction = { definitionText: "f(x) = EML(x, 1)", inputValueIds: [null] };
+  const migrated = Persistence.validateState(legacy);
+  assert.equal(migrated.ok, true);
+  assert.equal(migrated.state.customFunctions[0].name, "f");
 
   const parsed = Composition.parseDefinition("F(x, y, z) = EML(EML(x, y), z)");
   const evaluation = Composition.evaluate(parsed.definition, [Expr.ONE, Expr.ONE, Expr.ONE]);
@@ -68,5 +74,5 @@ test("UCF09 旧 V2 保存文件和组合函数来源均可校验", () => {
   );
   const restored = Persistence.deserialize(Persistence.serialize(added.state));
   assert.equal(restored.ok, true);
-  assert.equal(restored.state.customFunction.definitionText, "");
+  assert.deepEqual(restored.state.customFunctions, []);
 });

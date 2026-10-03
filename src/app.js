@@ -35,23 +35,14 @@
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     treeExpandMore: document.getElementById("treeExpandMore"),
-    customApplicationEmpty: document.getElementById("customApplicationEmpty"),
-    customCalculator: document.getElementById("customCalculator"),
+    customFunctionApplications: document.getElementById("customFunctionApplications"),
     customDefinition: document.getElementById("customDefinition"),
     customApply: document.getElementById("customApplyButton"),
     customDefinitionStatus: document.getElementById("customDefinitionStatus"),
-    customFormulaLine: document.getElementById("customFormulaLine"),
-    customFunctionName: document.getElementById("customFunctionName"),
-    customInputSlots: document.getElementById("customInputSlots"),
-    customResult: document.getElementById("customResultOutput"),
-    customAdd: document.getElementById("customAddButton"),
-    customDirectPreview: document.getElementById("customDirectPreview"),
   };
 
   let state = restoreState();
   let preview = null;
-  let customDefinition = null;
-  let customPreview = null;
   let customDefinitionError = "";
   let pointerDrag = null;
   let suppressValueClick = false;
@@ -103,31 +94,6 @@
     const x = currentValue(state.inputXId);
     const y = currentValue(state.inputYId);
     preview = x && y ? Evaluator.evaluateEML(x.canonicalExpression, y.canonicalExpression) : null;
-    recomputeCustomPreview();
-  }
-
-  function recomputeCustomPreview() {
-    const custom = Store.getCustomFunction(state);
-    customDefinition = null;
-    customPreview = null;
-    customDefinitionError = "";
-    if (!custom.definitionText) return;
-    const parsed = Composition.parseDefinition(custom.definitionText);
-    if (!parsed.ok) {
-      customDefinitionError = parsed.error;
-      return;
-    }
-    customDefinition = parsed.definition;
-    if (custom.inputValueIds.length !== customDefinition.parameterNames.length) {
-      customDefinitionError = "函数输入状态无效，请重新应用函数。";
-      return;
-    }
-    const inputs = custom.inputValueIds.map(currentValue);
-    if (inputs.some((value) => !value)) return;
-    customPreview = Composition.evaluate(
-      customDefinition,
-      inputs.map((value) => value.canonicalExpression)
-    );
   }
 
   function renderSlot(element, value, placeholder) {
@@ -167,61 +133,73 @@
     elements.add.disabled = false;
   }
 
-  function renderCustomCalculator() {
-    const custom = Store.getCustomFunction(state);
-    elements.customDefinition.value = custom.definitionText;
-    elements.customDefinitionStatus.textContent = customDefinitionError || (
-      customDefinition ? `已应用：${customDefinition.displayText}` : "只支持参数名与 EML(...) 的嵌套组合。"
-    );
-    elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
-    elements.customCalculator.hidden = !customDefinition;
-    elements.customApplicationEmpty.hidden = Boolean(customDefinition);
-    elements.customInputSlots.replaceChildren();
-
-    if (!customDefinition) {
-      elements.customResult.textContent = "?";
-      elements.customResult.classList.remove("error");
-      elements.customAdd.disabled = true;
-      return;
-    }
-
-    elements.customFunctionName.textContent = `${customDefinition.name}(`;
-    customDefinition.parameterNames.forEach((name, index) => {
+  function renderCustomCalculators() {
+    elements.customFunctionApplications.replaceChildren();
+    const functions = Store.getCustomFunctions(state);
+    for (const custom of functions) {
+      const parsed = Composition.parseDefinition(custom.definitionText);
+      if (!parsed.ok) continue;
+      const definition = parsed.definition;
+      const panel = document.createElement("div");
+      panel.className = "custom-calculator";
+      const line = document.createElement("div");
+      line.className = "formula-line custom-formula-line";
+      const name = document.createElement("span");
+      name.className = "formula-name";
+      name.textContent = `${definition.name}(`;
+      line.appendChild(name);
+      const slots = document.createElement("span");
+      slots.className = "custom-input-slots";
+      definition.parameterNames.forEach((parameterName, index) => {
       if (index > 0) {
         const comma = document.createElement("span");
         comma.className = "formula-punctuation";
         comma.textContent = ",";
-        elements.customInputSlots.appendChild(comma);
+          slots.appendChild(comma);
       }
       const slot = document.createElement("button");
       slot.type = "button";
       slot.className = "input-slot";
-      slot.dataset.slot = `custom:${index}`;
-      slot.setAttribute("aria-label", `${name} 输入位置`);
-      renderSlot(slot, currentValue(custom.inputValueIds[index]), name);
+        slot.dataset.slot = `custom:${custom.id}:${index}`;
+        slot.setAttribute("aria-label", `${parameterName} 输入位置`);
+        renderSlot(slot, currentValue(custom.inputValueIds[index]), parameterName);
       bindSlot(slot, slot.dataset.slot);
-      elements.customInputSlots.appendChild(slot);
-    });
-
-    const invalid = Boolean(customPreview && (!customPreview.ok || customPreview.limitReached));
-    elements.customResult.classList.toggle("error", invalid);
-    if (!customPreview) {
-      elements.customResult.textContent = "?";
-      elements.customDirectPreview.textContent = "等待全部参数。";
-      elements.customAdd.disabled = true;
-      return;
+        slots.appendChild(slot);
+      });
+      line.appendChild(slots);
+      const punctuation = document.createElement("span");
+      punctuation.className = "formula-punctuation";
+      punctuation.textContent = ") =";
+      line.appendChild(punctuation);
+      const result = document.createElement("output");
+      result.className = "result-slot";
+      const inputs = custom.inputValueIds.map(currentValue);
+      const evaluation = inputs.some((value) => !value) ? null : Composition.evaluate(definition, inputs.map((value) => value.canonicalExpression));
+      result.textContent = !evaluation ? "?" : !evaluation.ok ? "未定义" : evaluation.displayText;
+      result.classList.toggle("error", Boolean(evaluation && (!evaluation.ok || evaluation.limitReached)));
+      line.appendChild(result);
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "primary-button add-button";
+      add.textContent = "添加";
+      add.disabled = !evaluation || !evaluation.ok || evaluation.limitReached;
+      add.addEventListener("click", () => addCustomEvaluation(custom, evaluation));
+      line.appendChild(add);
+      panel.appendChild(line);
+      const direct = document.createElement("div");
+      direct.className = "direct-preview";
+      direct.textContent = !evaluation ? "等待全部参数。" : !evaluation.ok ? evaluation.error : evaluation.limitReached ? "化简达到安全上限，当前结果尚不能添加。" : evaluation.directFormula;
+      panel.appendChild(direct);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "delete-function-button";
+      remove.textContent = "删除函数";
+      remove.addEventListener("click", () => deleteCustomFunction(custom.id));
+      panel.appendChild(remove);
+      elements.customFunctionApplications.appendChild(panel);
     }
-    if (!customPreview.ok) {
-      elements.customResult.textContent = "未定义";
-      elements.customDirectPreview.textContent = customPreview.error;
-      elements.customAdd.disabled = true;
-      return;
-    }
-    elements.customResult.textContent = customPreview.displayText;
-    elements.customDirectPreview.textContent = customPreview.limitReached
-      ? "化简达到安全上限，当前结果尚不能添加。"
-      : customPreview.directFormula;
-    elements.customAdd.disabled = Boolean(customPreview.limitReached);
+    elements.customDefinitionStatus.textContent = customDefinitionError || "支持多个函数；只允许参数名和 EML(...) 的嵌套组合。";
+    elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
   }
 
   function makeDeleteButton(valueId) {
@@ -510,7 +488,7 @@
 
   function render() {
     renderCalculator();
-    renderCustomCalculator();
+    renderCustomCalculators();
     renderValues();
     renderDetails();
   }
@@ -521,7 +499,9 @@
       return;
     }
     if (slotName.startsWith("custom:")) {
-      state = Store.setCustomInput(state, Number(slotName.slice("custom:".length)), valueId);
+      const parts = slotName.split(":");
+      const inputIndex = Number(parts.pop());
+      state = Store.setCustomInput(state, parts.slice(1).join(":"), inputIndex, valueId);
     } else {
       state = Store.setInput(state, slotName, valueId);
     }
@@ -560,15 +540,21 @@
     const parsed = Composition.parseDefinition(elements.customDefinition.value);
     if (!parsed.ok) {
       customDefinitionError = parsed.error;
-      customDefinition = null;
-      customPreview = null;
-      renderCustomCalculator();
+      render();
       return;
     }
-    state = Store.setCustomFunction(state, parsed.definition.displayText, parsed.definition.parameterNames.length);
+    const result = Store.addCustomFunction(state, parsed.definition.name, parsed.definition.displayText, parsed.definition.parameterNames.length);
+    if (result.status !== "added") {
+      customDefinitionError = result.status === "duplicate-name" ? "同名函数已存在，请使用其他函数名。" : "函数定义无效。";
+      render();
+      return;
+    }
+    state = result.state;
+    customDefinitionError = "";
+    elements.customDefinition.value = "";
     recomputePreview();
     persistState();
-    showNotice("已应用 EML 组合函数。", false);
+    showNotice(`已添加函数 ${parsed.definition.name}。`, false);
     render();
   });
 
@@ -586,10 +572,9 @@
     render();
   });
 
-  elements.customAdd.addEventListener("click", () => {
-    const custom = Store.getCustomFunction(state);
-    if (!customPreview || !customPreview.ok || customPreview.limitReached || custom.inputValueIds.some((id) => !id)) return;
-    const result = Store.addCompositionEvaluation(state, customPreview, custom.inputValueIds);
+  function addCustomEvaluation(custom, evaluation) {
+    if (!evaluation || !evaluation.ok || evaluation.limitReached || custom.inputValueIds.some((id) => !id)) return;
+    const result = Store.addCompositionEvaluation(state, evaluation, custom.inputValueIds);
     state = result.state;
     persistState();
     const messages = {
@@ -599,7 +584,17 @@
     };
     showNotice(messages[result.status] || "无法添加当前组合函数结果。", result.status === "invalid");
     render();
-  });
+  }
+
+  function deleteCustomFunction(functionId) {
+    const result = Store.deleteCustomFunction(state, functionId);
+    if (result.status !== "deleted") return;
+    state = result.state;
+    recomputePreview();
+    persistState();
+    showNotice("已删除函数定义；已保存的数值和公式来源保持不变。", false);
+    render();
+  }
 
   elements.save.addEventListener("click", () => {
     const blob = new Blob([Persistence.serialize(state)], { type: "application/json;charset=utf-8" });

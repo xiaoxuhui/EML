@@ -19,6 +19,7 @@
 
   function renderBody(node) {
     if (node.type === "parameter") return node.name;
+    if (node.type === "constant") return node.displayText;
     return `EML(${renderBody(node.left)}, ${renderBody(node.right)})`;
   }
 
@@ -71,8 +72,23 @@
 
     function parseBody(depth) {
       if (depth > MAX_NESTING) return { error: `EML 嵌套不能超过 ${MAX_NESTING} 层。` };
+      skipWhitespace();
+      const constants = [
+        ["1", Expr.ONE, "1"],
+        ["0", Expr.ZERO, "0"],
+        ["π", Expr.PI, "π"],
+      ];
+      for (const [token, expression, displayText] of constants) {
+        if (source.startsWith(token, index)) {
+          index += token.length;
+          return { node: { type: "constant", expression, displayText } };
+        }
+      }
       const token = identifier();
       if (!token) return { error: "函数体只能使用参数名或 EML(...)。" };
+      if (token === "e") return { node: { type: "constant", expression: Expr.E, displayText: "e" } };
+      if (token === "i") return { node: { type: "constant", expression: Expr.I, displayText: "i" } };
+      if (token === "pi") return { node: { type: "constant", expression: Expr.PI, displayText: "π" } };
       if (token !== "EML") {
         if (!parameterNames.includes(token)) return { error: `参数 ${token} 未声明。` };
         return { node: { type: "parameter", name: token } };
@@ -115,6 +131,7 @@
 
     function evaluateNode(node) {
       if (node.type === "parameter") return { ok: true, expression: inputs.get(node.name), rewriteSteps: [], limitReached: false };
+      if (node.type === "constant") return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false };
       const left = evaluateNode(node.left);
       if (!left.ok) return left;
       const right = evaluateNode(node.right);

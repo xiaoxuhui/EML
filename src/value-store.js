@@ -17,7 +17,21 @@
   const MAX_TREE_NODES = 800;
   const MAX_CUSTOM_INPUTS = 6;
 
-  const emptyCustomFunction = () => ({ definitionText: "", inputValueIds: [] });
+  const customFunctionIdFor = (name) => encodeId("function", name);
+
+  function getCustomFunctions(state) {
+    if (Array.isArray(state?.customFunctions)) {
+      return state.customFunctions
+        .filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && typeof item.definitionText === "string" && Array.isArray(item.inputValueIds))
+        .map((item) => ({ id: item.id, name: item.name, definitionText: item.definitionText, inputValueIds: item.inputValueIds.slice(0, MAX_CUSTOM_INPUTS) }));
+    }
+    const legacy = state?.customFunction;
+    if (legacy?.definitionText && Array.isArray(legacy.inputValueIds)) {
+      const name = String(legacy.definitionText).match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(/)?.[1];
+      if (name) return [{ id: customFunctionIdFor(name), name, definitionText: legacy.definitionText, inputValueIds: legacy.inputValueIds.slice(0, MAX_CUSTOM_INPUTS) }];
+    }
+    return [];
+  }
 
   function createInitialValue() {
     return {
@@ -41,7 +55,7 @@
       inputXId: null,
       inputYId: null,
       selectedValueId: null,
-      customFunction: emptyCustomFunction(),
+      customFunctions: [],
     };
   }
 
@@ -194,9 +208,10 @@
     next.valueOrder = next.valueOrder.filter((id) => id !== valueId);
     if (next.inputXId === valueId) next.inputXId = null;
     if (next.inputYId === valueId) next.inputYId = null;
-    if (Array.isArray(next.customFunction?.inputValueIds)) {
-      next.customFunction.inputValueIds = next.customFunction.inputValueIds.map((id) => id === valueId ? null : id);
-    }
+    next.customFunctions = getCustomFunctions(next).map((custom) => ({
+      ...custom,
+      inputValueIds: custom.inputValueIds.map((id) => id === valueId ? null : id),
+    }));
     if (next.selectedValueId === valueId) next.selectedValueId = null;
     return { state: next, status: "deleted" };
   }
@@ -220,38 +235,35 @@
     return next;
   }
 
-  function getCustomFunction(state) {
-    const custom = state?.customFunction;
-    if (!custom || typeof custom.definitionText !== "string" || !Array.isArray(custom.inputValueIds)) {
-      return emptyCustomFunction();
-    }
-    return {
-      definitionText: custom.definitionText,
-      inputValueIds: custom.inputValueIds.slice(0, MAX_CUSTOM_INPUTS),
-    };
+  function addCustomFunction(state, name, definitionText, inputCount) {
+    if (typeof name !== "string" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(name) || typeof definitionText !== "string" || !Number.isInteger(inputCount) || inputCount < 1 || inputCount > MAX_CUSTOM_INPUTS) return { state, status: "invalid" };
+    const functions = getCustomFunctions(state);
+    if (functions.some((item) => item.name === name)) return { state, status: "duplicate-name" };
+    const next = cloneState(state);
+    next.customFunctions = functions.concat({ id: customFunctionIdFor(name), name, definitionText, inputValueIds: Array(inputCount).fill(null) });
+    delete next.customFunction;
+    return { state: next, status: "added", functionId: customFunctionIdFor(name) };
   }
 
-  function setCustomFunction(state, definitionText, inputCount) {
-    if (typeof definitionText !== "string" || !Number.isInteger(inputCount) || inputCount < 1 || inputCount > MAX_CUSTOM_INPUTS) {
-      return state;
-    }
+  function deleteCustomFunction(state, functionId) {
+    const functions = getCustomFunctions(state);
+    if (!functions.some((item) => item.id === functionId)) return { state, status: "missing" };
     const next = cloneState(state);
-    const previousInputs = getCustomFunction(state).inputValueIds;
-    next.customFunction = {
-      definitionText,
-      inputValueIds: Array.from({ length: inputCount }, (_, index) => previousInputs[index] || null),
-    };
-    return next;
+    next.customFunctions = functions.filter((item) => item.id !== functionId);
+    delete next.customFunction;
+    return { state: next, status: "deleted" };
   }
 
-  function setCustomInput(state, inputIndex, valueId) {
-    const custom = getCustomFunction(state);
-    if (!state.values[valueId] || !Number.isInteger(inputIndex) || inputIndex < 0 || inputIndex >= custom.inputValueIds.length) {
-      return state;
-    }
+  function setCustomInput(state, functionId, inputIndex, valueId) {
+    const functions = getCustomFunctions(state);
+    const custom = functions.find((item) => item.id === functionId);
+    if (!state.values[valueId] || !custom || !Number.isInteger(inputIndex) || inputIndex < 0 || inputIndex >= custom.inputValueIds.length) return state;
     const next = cloneState(state);
-    next.customFunction = custom;
-    next.customFunction.inputValueIds[inputIndex] = valueId;
+    next.customFunctions = functions.map((item) => item.id === functionId ? {
+      ...item,
+      inputValueIds: item.inputValueIds.map((id, index) => index === inputIndex ? valueId : id),
+    } : item);
+    delete next.customFunction;
     return next;
   }
 
@@ -337,6 +349,7 @@
     MAX_TREE_DEPTH,
     MAX_TREE_NODES,
     MAX_CUSTOM_INPUTS,
+    customFunctionIdFor,
     valueIdFor,
     formulaKeyFor,
     compositionFormulaKeyFor,
@@ -348,8 +361,9 @@
     clearNonInitial,
     selectValue,
     setInput,
-    getCustomFunction,
-    setCustomFunction,
+    getCustomFunctions,
+    addCustomFunction,
+    deleteCustomFunction,
     setCustomInput,
     isReferenced,
     buildValueTree,

@@ -362,7 +362,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     </header>
 
     <section class="calculator" aria-labelledby="calculatorTitle">
-      <h2 id="calculatorTitle">计算</h2>
+      <h2 id="calculatorTitle">函数应用</h2>
       <div class="formula-line">
         <span class="formula-name">EML(</span>
         <button type="button" class="input-slot" id="slotX" data-slot="x" aria-label="x 输入位置">x</button>
@@ -374,21 +374,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       </div>
       <div class="direct-preview" id="directPreview">等待 x、y</div>
       <div class="notice" id="notice" role="status" aria-live="polite"></div>
-    </section>
-
-    <section class="function-application-section" aria-labelledby="functionApplicationTitle">
-      <h2 id="functionApplicationTitle">函数应用</h2>
-      <div class="function-application-empty" id="customApplicationEmpty">请先在下方定义函数。</div>
-      <div class="custom-calculator" id="customCalculator" hidden>
-        <div class="formula-line custom-formula-line" id="customFormulaLine">
-          <span class="formula-name" id="customFunctionName"></span>
-          <span class="custom-input-slots" id="customInputSlots"></span>
-          <span class="formula-punctuation">) =</span>
-          <output class="result-slot" id="customResultOutput" aria-live="polite">?</output>
-          <button type="button" class="primary-button add-button" id="customAddButton" disabled>添加</button>
-        </div>
-        <div class="direct-preview" id="customDirectPreview">等待函数输入</div>
-      </div>
+      <div class="custom-function-applications" id="customFunctionApplications"></div>
     </section>
 
     <section class="function-definition-section" aria-labelledby="customDefinitionTitle">
@@ -1589,6 +1575,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   function renderBody(node) {
     if (node.type === "parameter") return node.name;
+    if (node.type === "constant") return node.displayText;
     return `EML(${renderBody(node.left)}, ${renderBody(node.right)})`;
   }
 
@@ -1641,8 +1628,23 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
     function parseBody(depth) {
       if (depth > MAX_NESTING) return { error: `EML 嵌套不能超过 ${MAX_NESTING} 层。` };
+      skipWhitespace();
+      const constants = [
+        ["1", Expr.ONE, "1"],
+        ["0", Expr.ZERO, "0"],
+        ["π", Expr.PI, "π"],
+      ];
+      for (const [token, expression, displayText] of constants) {
+        if (source.startsWith(token, index)) {
+          index += token.length;
+          return { node: { type: "constant", expression, displayText } };
+        }
+      }
       const token = identifier();
       if (!token) return { error: "函数体只能使用参数名或 EML(...)。" };
+      if (token === "e") return { node: { type: "constant", expression: Expr.E, displayText: "e" } };
+      if (token === "i") return { node: { type: "constant", expression: Expr.I, displayText: "i" } };
+      if (token === "pi") return { node: { type: "constant", expression: Expr.PI, displayText: "π" } };
       if (token !== "EML") {
         if (!parameterNames.includes(token)) return { error: `参数 ${token} 未声明。` };
         return { node: { type: "parameter", name: token } };
@@ -1685,6 +1687,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
     function evaluateNode(node) {
       if (node.type === "parameter") return { ok: true, expression: inputs.get(node.name), rewriteSteps: [], limitReached: false };
+      if (node.type === "constant") return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false };
       const left = evaluateNode(node.left);
       if (!left.ok) return left;
       const right = evaluateNode(node.right);
@@ -1755,7 +1758,21 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const MAX_TREE_NODES = 800;
   const MAX_CUSTOM_INPUTS = 6;
 
-  const emptyCustomFunction = () => ({ definitionText: "", inputValueIds: [] });
+  const customFunctionIdFor = (name) => encodeId("function", name);
+
+  function getCustomFunctions(state) {
+    if (Array.isArray(state?.customFunctions)) {
+      return state.customFunctions
+        .filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && typeof item.definitionText === "string" && Array.isArray(item.inputValueIds))
+        .map((item) => ({ id: item.id, name: item.name, definitionText: item.definitionText, inputValueIds: item.inputValueIds.slice(0, MAX_CUSTOM_INPUTS) }));
+    }
+    const legacy = state?.customFunction;
+    if (legacy?.definitionText && Array.isArray(legacy.inputValueIds)) {
+      const name = String(legacy.definitionText).match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(/)?.[1];
+      if (name) return [{ id: customFunctionIdFor(name), name, definitionText: legacy.definitionText, inputValueIds: legacy.inputValueIds.slice(0, MAX_CUSTOM_INPUTS) }];
+    }
+    return [];
+  }
 
   function createInitialValue() {
     return {
@@ -1779,7 +1796,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       inputXId: null,
       inputYId: null,
       selectedValueId: null,
-      customFunction: emptyCustomFunction(),
+      customFunctions: [],
     };
   }
 
@@ -1932,9 +1949,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     next.valueOrder = next.valueOrder.filter((id) => id !== valueId);
     if (next.inputXId === valueId) next.inputXId = null;
     if (next.inputYId === valueId) next.inputYId = null;
-    if (Array.isArray(next.customFunction?.inputValueIds)) {
-      next.customFunction.inputValueIds = next.customFunction.inputValueIds.map((id) => id === valueId ? null : id);
-    }
+    next.customFunctions = getCustomFunctions(next).map((custom) => ({
+      ...custom,
+      inputValueIds: custom.inputValueIds.map((id) => id === valueId ? null : id),
+    }));
     if (next.selectedValueId === valueId) next.selectedValueId = null;
     return { state: next, status: "deleted" };
   }
@@ -1958,38 +1976,35 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return next;
   }
 
-  function getCustomFunction(state) {
-    const custom = state?.customFunction;
-    if (!custom || typeof custom.definitionText !== "string" || !Array.isArray(custom.inputValueIds)) {
-      return emptyCustomFunction();
-    }
-    return {
-      definitionText: custom.definitionText,
-      inputValueIds: custom.inputValueIds.slice(0, MAX_CUSTOM_INPUTS),
-    };
+  function addCustomFunction(state, name, definitionText, inputCount) {
+    if (typeof name !== "string" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(name) || typeof definitionText !== "string" || !Number.isInteger(inputCount) || inputCount < 1 || inputCount > MAX_CUSTOM_INPUTS) return { state, status: "invalid" };
+    const functions = getCustomFunctions(state);
+    if (functions.some((item) => item.name === name)) return { state, status: "duplicate-name" };
+    const next = cloneState(state);
+    next.customFunctions = functions.concat({ id: customFunctionIdFor(name), name, definitionText, inputValueIds: Array(inputCount).fill(null) });
+    delete next.customFunction;
+    return { state: next, status: "added", functionId: customFunctionIdFor(name) };
   }
 
-  function setCustomFunction(state, definitionText, inputCount) {
-    if (typeof definitionText !== "string" || !Number.isInteger(inputCount) || inputCount < 1 || inputCount > MAX_CUSTOM_INPUTS) {
-      return state;
-    }
+  function deleteCustomFunction(state, functionId) {
+    const functions = getCustomFunctions(state);
+    if (!functions.some((item) => item.id === functionId)) return { state, status: "missing" };
     const next = cloneState(state);
-    const previousInputs = getCustomFunction(state).inputValueIds;
-    next.customFunction = {
-      definitionText,
-      inputValueIds: Array.from({ length: inputCount }, (_, index) => previousInputs[index] || null),
-    };
-    return next;
+    next.customFunctions = functions.filter((item) => item.id !== functionId);
+    delete next.customFunction;
+    return { state: next, status: "deleted" };
   }
 
-  function setCustomInput(state, inputIndex, valueId) {
-    const custom = getCustomFunction(state);
-    if (!state.values[valueId] || !Number.isInteger(inputIndex) || inputIndex < 0 || inputIndex >= custom.inputValueIds.length) {
-      return state;
-    }
+  function setCustomInput(state, functionId, inputIndex, valueId) {
+    const functions = getCustomFunctions(state);
+    const custom = functions.find((item) => item.id === functionId);
+    if (!state.values[valueId] || !custom || !Number.isInteger(inputIndex) || inputIndex < 0 || inputIndex >= custom.inputValueIds.length) return state;
     const next = cloneState(state);
-    next.customFunction = custom;
-    next.customFunction.inputValueIds[inputIndex] = valueId;
+    next.customFunctions = functions.map((item) => item.id === functionId ? {
+      ...item,
+      inputValueIds: item.inputValueIds.map((id, index) => index === inputIndex ? valueId : id),
+    } : item);
+    delete next.customFunction;
     return next;
   }
 
@@ -2075,6 +2090,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     MAX_TREE_DEPTH,
     MAX_TREE_NODES,
     MAX_CUSTOM_INPUTS,
+    customFunctionIdFor,
     valueIdFor,
     formulaKeyFor,
     compositionFormulaKeyFor,
@@ -2086,8 +2102,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     clearNonInitial,
     selectValue,
     setInput,
-    getCustomFunction,
-    setCustomFunction,
+    getCustomFunctions,
+    addCustomFunction,
+    deleteCustomFunction,
     setCustomInput,
     isReferenced,
     buildValueTree,
@@ -2122,6 +2139,15 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     typeof value === "string" && value.length <= maximum
   );
 
+  function migrateCustomFunctions(candidate) {
+    const next = JSON.parse(JSON.stringify(candidate));
+    if (!Array.isArray(next.customFunctions)) {
+      next.customFunctions = ValueStore.getCustomFunctions(next);
+    }
+    delete next.customFunction;
+    return next;
+  }
+
   function hasDependencyCycle(state) {
     const visiting = new Set();
     const visited = new Set();
@@ -2144,6 +2170,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   }
 
   function validateState(candidate) {
+    candidate = migrateCustomFunctions(candidate);
     if (!candidate || candidate.schemaVersion !== 2) return { ok: false, error: "不支持的数据版本" };
     if (!candidate.values || typeof candidate.values !== "object") return { ok: false, error: "缺少数值数据" };
     if (!candidate.derivations || typeof candidate.derivations !== "object") return { ok: false, error: "缺少公式数据" };
@@ -2213,11 +2240,15 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       return { ok: false, error: "选择状态引用了不存在的数值" };
     }
 
-    if (candidate.customFunction !== undefined) {
-      const custom = candidate.customFunction;
+    if (!Array.isArray(candidate.customFunctions) || new Set(candidate.customFunctions.map((item) => item?.id)).size !== candidate.customFunctions.length) {
+      return { ok: false, error: "组合函数状态无效" };
+    }
+    if (new Set(candidate.customFunctions.map((item) => item?.name)).size !== candidate.customFunctions.length) return { ok: false, error: "函数名称存在重复" };
+    for (const custom of candidate.customFunctions) {
       if (
-        !custom || !isShortString(custom.definitionText, 1000) ||
-        !Array.isArray(custom.inputValueIds) || custom.inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
+        !custom || !isShortString(custom.id, 120) || !/^[A-Za-z][A-Za-z0-9_]*$/.test(custom.name) ||
+        !isShortString(custom.definitionText, 1000) || !Array.isArray(custom.inputValueIds) ||
+        custom.inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
         custom.inputValueIds.some((valueId) => valueId !== null && !candidate.values[valueId])
       ) return { ok: false, error: "组合函数状态无效" };
     }
@@ -2621,23 +2652,14 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     treeExpandMore: document.getElementById("treeExpandMore"),
-    customApplicationEmpty: document.getElementById("customApplicationEmpty"),
-    customCalculator: document.getElementById("customCalculator"),
+    customFunctionApplications: document.getElementById("customFunctionApplications"),
     customDefinition: document.getElementById("customDefinition"),
     customApply: document.getElementById("customApplyButton"),
     customDefinitionStatus: document.getElementById("customDefinitionStatus"),
-    customFormulaLine: document.getElementById("customFormulaLine"),
-    customFunctionName: document.getElementById("customFunctionName"),
-    customInputSlots: document.getElementById("customInputSlots"),
-    customResult: document.getElementById("customResultOutput"),
-    customAdd: document.getElementById("customAddButton"),
-    customDirectPreview: document.getElementById("customDirectPreview"),
   };
 
   let state = restoreState();
   let preview = null;
-  let customDefinition = null;
-  let customPreview = null;
   let customDefinitionError = "";
   let pointerDrag = null;
   let suppressValueClick = false;
@@ -2689,31 +2711,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const x = currentValue(state.inputXId);
     const y = currentValue(state.inputYId);
     preview = x && y ? Evaluator.evaluateEML(x.canonicalExpression, y.canonicalExpression) : null;
-    recomputeCustomPreview();
-  }
-
-  function recomputeCustomPreview() {
-    const custom = Store.getCustomFunction(state);
-    customDefinition = null;
-    customPreview = null;
-    customDefinitionError = "";
-    if (!custom.definitionText) return;
-    const parsed = Composition.parseDefinition(custom.definitionText);
-    if (!parsed.ok) {
-      customDefinitionError = parsed.error;
-      return;
-    }
-    customDefinition = parsed.definition;
-    if (custom.inputValueIds.length !== customDefinition.parameterNames.length) {
-      customDefinitionError = "函数输入状态无效，请重新应用函数。";
-      return;
-    }
-    const inputs = custom.inputValueIds.map(currentValue);
-    if (inputs.some((value) => !value)) return;
-    customPreview = Composition.evaluate(
-      customDefinition,
-      inputs.map((value) => value.canonicalExpression)
-    );
   }
 
   function renderSlot(element, value, placeholder) {
@@ -2753,61 +2750,73 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     elements.add.disabled = false;
   }
 
-  function renderCustomCalculator() {
-    const custom = Store.getCustomFunction(state);
-    elements.customDefinition.value = custom.definitionText;
-    elements.customDefinitionStatus.textContent = customDefinitionError || (
-      customDefinition ? `已应用：${customDefinition.displayText}` : "只支持参数名与 EML(...) 的嵌套组合。"
-    );
-    elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
-    elements.customCalculator.hidden = !customDefinition;
-    elements.customApplicationEmpty.hidden = Boolean(customDefinition);
-    elements.customInputSlots.replaceChildren();
-
-    if (!customDefinition) {
-      elements.customResult.textContent = "?";
-      elements.customResult.classList.remove("error");
-      elements.customAdd.disabled = true;
-      return;
-    }
-
-    elements.customFunctionName.textContent = `${customDefinition.name}(`;
-    customDefinition.parameterNames.forEach((name, index) => {
+  function renderCustomCalculators() {
+    elements.customFunctionApplications.replaceChildren();
+    const functions = Store.getCustomFunctions(state);
+    for (const custom of functions) {
+      const parsed = Composition.parseDefinition(custom.definitionText);
+      if (!parsed.ok) continue;
+      const definition = parsed.definition;
+      const panel = document.createElement("div");
+      panel.className = "custom-calculator";
+      const line = document.createElement("div");
+      line.className = "formula-line custom-formula-line";
+      const name = document.createElement("span");
+      name.className = "formula-name";
+      name.textContent = `${definition.name}(`;
+      line.appendChild(name);
+      const slots = document.createElement("span");
+      slots.className = "custom-input-slots";
+      definition.parameterNames.forEach((parameterName, index) => {
       if (index > 0) {
         const comma = document.createElement("span");
         comma.className = "formula-punctuation";
         comma.textContent = ",";
-        elements.customInputSlots.appendChild(comma);
+          slots.appendChild(comma);
       }
       const slot = document.createElement("button");
       slot.type = "button";
       slot.className = "input-slot";
-      slot.dataset.slot = `custom:${index}`;
-      slot.setAttribute("aria-label", `${name} 输入位置`);
-      renderSlot(slot, currentValue(custom.inputValueIds[index]), name);
+        slot.dataset.slot = `custom:${custom.id}:${index}`;
+        slot.setAttribute("aria-label", `${parameterName} 输入位置`);
+        renderSlot(slot, currentValue(custom.inputValueIds[index]), parameterName);
       bindSlot(slot, slot.dataset.slot);
-      elements.customInputSlots.appendChild(slot);
-    });
-
-    const invalid = Boolean(customPreview && (!customPreview.ok || customPreview.limitReached));
-    elements.customResult.classList.toggle("error", invalid);
-    if (!customPreview) {
-      elements.customResult.textContent = "?";
-      elements.customDirectPreview.textContent = "等待全部参数。";
-      elements.customAdd.disabled = true;
-      return;
+        slots.appendChild(slot);
+      });
+      line.appendChild(slots);
+      const punctuation = document.createElement("span");
+      punctuation.className = "formula-punctuation";
+      punctuation.textContent = ") =";
+      line.appendChild(punctuation);
+      const result = document.createElement("output");
+      result.className = "result-slot";
+      const inputs = custom.inputValueIds.map(currentValue);
+      const evaluation = inputs.some((value) => !value) ? null : Composition.evaluate(definition, inputs.map((value) => value.canonicalExpression));
+      result.textContent = !evaluation ? "?" : !evaluation.ok ? "未定义" : evaluation.displayText;
+      result.classList.toggle("error", Boolean(evaluation && (!evaluation.ok || evaluation.limitReached)));
+      line.appendChild(result);
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "primary-button add-button";
+      add.textContent = "添加";
+      add.disabled = !evaluation || !evaluation.ok || evaluation.limitReached;
+      add.addEventListener("click", () => addCustomEvaluation(custom, evaluation));
+      line.appendChild(add);
+      panel.appendChild(line);
+      const direct = document.createElement("div");
+      direct.className = "direct-preview";
+      direct.textContent = !evaluation ? "等待全部参数。" : !evaluation.ok ? evaluation.error : evaluation.limitReached ? "化简达到安全上限，当前结果尚不能添加。" : evaluation.directFormula;
+      panel.appendChild(direct);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "delete-function-button";
+      remove.textContent = "删除函数";
+      remove.addEventListener("click", () => deleteCustomFunction(custom.id));
+      panel.appendChild(remove);
+      elements.customFunctionApplications.appendChild(panel);
     }
-    if (!customPreview.ok) {
-      elements.customResult.textContent = "未定义";
-      elements.customDirectPreview.textContent = customPreview.error;
-      elements.customAdd.disabled = true;
-      return;
-    }
-    elements.customResult.textContent = customPreview.displayText;
-    elements.customDirectPreview.textContent = customPreview.limitReached
-      ? "化简达到安全上限，当前结果尚不能添加。"
-      : customPreview.directFormula;
-    elements.customAdd.disabled = Boolean(customPreview.limitReached);
+    elements.customDefinitionStatus.textContent = customDefinitionError || "支持多个函数；只允许参数名和 EML(...) 的嵌套组合。";
+    elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
   }
 
   function makeDeleteButton(valueId) {
@@ -3096,7 +3105,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   function render() {
     renderCalculator();
-    renderCustomCalculator();
+    renderCustomCalculators();
     renderValues();
     renderDetails();
   }
@@ -3107,7 +3116,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       return;
     }
     if (slotName.startsWith("custom:")) {
-      state = Store.setCustomInput(state, Number(slotName.slice("custom:".length)), valueId);
+      const parts = slotName.split(":");
+      const inputIndex = Number(parts.pop());
+      state = Store.setCustomInput(state, parts.slice(1).join(":"), inputIndex, valueId);
     } else {
       state = Store.setInput(state, slotName, valueId);
     }
@@ -3146,15 +3157,21 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const parsed = Composition.parseDefinition(elements.customDefinition.value);
     if (!parsed.ok) {
       customDefinitionError = parsed.error;
-      customDefinition = null;
-      customPreview = null;
-      renderCustomCalculator();
+      render();
       return;
     }
-    state = Store.setCustomFunction(state, parsed.definition.displayText, parsed.definition.parameterNames.length);
+    const result = Store.addCustomFunction(state, parsed.definition.name, parsed.definition.displayText, parsed.definition.parameterNames.length);
+    if (result.status !== "added") {
+      customDefinitionError = result.status === "duplicate-name" ? "同名函数已存在，请使用其他函数名。" : "函数定义无效。";
+      render();
+      return;
+    }
+    state = result.state;
+    customDefinitionError = "";
+    elements.customDefinition.value = "";
     recomputePreview();
     persistState();
-    showNotice("已应用 EML 组合函数。", false);
+    showNotice(`已添加函数 ${parsed.definition.name}。`, false);
     render();
   });
 
@@ -3172,10 +3189,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     render();
   });
 
-  elements.customAdd.addEventListener("click", () => {
-    const custom = Store.getCustomFunction(state);
-    if (!customPreview || !customPreview.ok || customPreview.limitReached || custom.inputValueIds.some((id) => !id)) return;
-    const result = Store.addCompositionEvaluation(state, customPreview, custom.inputValueIds);
+  function addCustomEvaluation(custom, evaluation) {
+    if (!evaluation || !evaluation.ok || evaluation.limitReached || custom.inputValueIds.some((id) => !id)) return;
+    const result = Store.addCompositionEvaluation(state, evaluation, custom.inputValueIds);
     state = result.state;
     persistState();
     const messages = {
@@ -3185,7 +3201,17 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     };
     showNotice(messages[result.status] || "无法添加当前组合函数结果。", result.status === "invalid");
     render();
-  });
+  }
+
+  function deleteCustomFunction(functionId) {
+    const result = Store.deleteCustomFunction(state, functionId);
+    if (result.status !== "deleted") return;
+    state = result.state;
+    recomputePreview();
+    persistState();
+    showNotice("已删除函数定义；已保存的数值和公式来源保持不变。", false);
+    render();
+  }
 
   elements.save.addEventListener("click", () => {
     const blob = new Blob([Persistence.serialize(state)], { type: "application/json;charset=utf-8" });
