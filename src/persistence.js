@@ -33,7 +33,7 @@
       const value = state.values[valueId];
       for (const derivationId of value.derivationIds) {
         const derivation = state.derivations[derivationId];
-        if (derivation && (visit(derivation.xValueId) || visit(derivation.yValueId))) return true;
+        if (derivation && ValueStore.derivationInputIds(derivation).some(visit)) return true;
       }
       visiting.delete(valueId);
       visited.add(valueId);
@@ -70,11 +70,26 @@
 
     for (const [derivationId, derivation] of Object.entries(candidate.derivations)) {
       if (!derivation || derivation.id !== derivationId) return { ok: false, error: "存在无效公式" };
-      if (!candidate.values[derivation.xValueId] || !candidate.values[derivation.yValueId] || !candidate.values[derivation.resultValueId]) {
+      const inputValueIds = ValueStore.derivationInputIds(derivation);
+      if (inputValueIds.length === 0 || inputValueIds.some((valueId) => !candidate.values[valueId]) || !candidate.values[derivation.resultValueId]) {
         return { ok: false, error: "公式引用了不存在的数值" };
       }
-      if (derivation.operation !== "EML" || !isShortString(derivation.directFormula)) {
+      if (!isShortString(derivation.directFormula)) {
         return { ok: false, error: "公式内容无效" };
+      }
+      if (derivation.operation === "EML") {
+        if (inputValueIds.length !== 2 || !candidate.values[derivation.xValueId] || !candidate.values[derivation.yValueId]) {
+          return { ok: false, error: "EML 公式输入无效" };
+        }
+      } else if (derivation.operation === "EML_COMPOSITION") {
+        if (
+          inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
+          !Array.isArray(derivation.inputNames) || derivation.inputNames.length !== inputValueIds.length ||
+          derivation.inputNames.some((name) => !isShortString(name, 100)) ||
+          !isShortString(derivation.functionDefinition, 1000)
+        ) return { ok: false, error: "组合函数内容无效" };
+      } else {
+        return { ok: false, error: "不支持的公式类型" };
       }
       if (!Expr.isValidExpression(derivation.rawExpression)) return { ok: false, error: "公式表达式无效" };
       if (!Array.isArray(derivation.rewriteSteps) || derivation.rewriteSteps.length > MAX_REWRITE_STEPS) {
@@ -96,6 +111,15 @@
     const allowedSelection = (id) => id === null || Boolean(candidate.values[id]);
     if (!allowedSelection(candidate.inputXId) || !allowedSelection(candidate.inputYId) || !allowedSelection(candidate.selectedValueId)) {
       return { ok: false, error: "选择状态引用了不存在的数值" };
+    }
+
+    if (candidate.customFunction !== undefined) {
+      const custom = candidate.customFunction;
+      if (
+        !custom || !isShortString(custom.definitionText, 1000) ||
+        !Array.isArray(custom.inputValueIds) || custom.inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
+        custom.inputValueIds.some((valueId) => valueId !== null && !candidate.values[valueId])
+      ) return { ok: false, error: "组合函数状态无效" };
     }
 
     if (hasDependencyCycle(candidate)) return { ok: false, error: "公式来源存在循环引用" };

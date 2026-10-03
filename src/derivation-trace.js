@@ -60,8 +60,20 @@
         step.directFormula = derivation.directFormula || "";
         step.rewriteSteps = Array.isArray(derivation.rewriteSteps) ? derivation.rewriteSteps : [];
         // 先访问输入：后序保证任何一步被记录时，它的输入都已在前
-        step.x = visit(derivation.xValueId);
-        step.y = visit(derivation.yValueId);
+        const inputIds = Array.isArray(derivation.inputValueIds)
+          ? derivation.inputValueIds
+          : [derivation.xValueId, derivation.yValueId];
+        const inputNames = Array.isArray(derivation.inputNames)
+          ? derivation.inputNames
+          : ["x", "y"];
+        step.inputs = inputIds.map((valueId, index) => ({
+          name: inputNames[index] || `参数 ${index + 1}`,
+          value: visit(valueId),
+        }));
+        if (derivation.operation === "EML" || !derivation.operation) {
+          step.x = step.inputs[0]?.value;
+          step.y = step.inputs[1]?.value;
+        }
       }
 
       inProgress.delete(currentId);

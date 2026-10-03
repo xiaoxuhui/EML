@@ -15,6 +15,9 @@
   const DEFAULT_TREE_DEPTH = 4;
   const MAX_TREE_DEPTH = 32;
   const MAX_TREE_NODES = 800;
+  const MAX_CUSTOM_INPUTS = 6;
+
+  const emptyCustomFunction = () => ({ definitionText: "", inputValueIds: [] });
 
   function createInitialValue() {
     return {
@@ -38,6 +41,7 @@
       inputXId: null,
       inputYId: null,
       selectedValueId: null,
+      customFunction: emptyCustomFunction(),
     };
   }
 
@@ -45,6 +49,16 @@
 
   function formulaKeyFor(evaluation) {
     return `eml(${Expr.canonicalKey(evaluation.xExpression)},${Expr.canonicalKey(evaluation.yExpression)})->${evaluation.canonicalKey}`;
+  }
+
+  function compositionFormulaKeyFor(evaluation) {
+    return `eml-composition(${evaluation.definitionKey}|${evaluation.inputExpressions
+      .map((expression) => Expr.canonicalKey(expression)).join(",")})->${evaluation.canonicalKey}`;
+  }
+
+  function derivationInputIds(derivation) {
+    if (Array.isArray(derivation?.inputValueIds)) return derivation.inputValueIds;
+    return derivation ? [derivation.xValueId, derivation.yValueId] : [];
   }
 
   function addEvaluation(state, evaluation, xValueId, yValueId) {
@@ -104,9 +118,67 @@
     };
   }
 
+  function addCompositionEvaluation(state, evaluation, inputValueIds) {
+    if (!evaluation || !evaluation.ok || evaluation.operation !== "EML_COMPOSITION") {
+      return { state, status: "invalid" };
+    }
+    if (!Array.isArray(inputValueIds) || inputValueIds.length !== evaluation.inputExpressions.length) {
+      return { state, status: "missing-input" };
+    }
+    if (inputValueIds.some((valueId) => !state.values[valueId])) return { state, status: "missing-input" };
+
+    const next = cloneState(state);
+    const resultValueId = valueIdFor(evaluation.canonicalKey);
+    const formulaKey = compositionFormulaKeyFor(evaluation);
+    const derivationId = derivationIdFor(formulaKey);
+    const existingValue = next.values[resultValueId];
+    const existingDerivation = next.derivations[derivationId];
+
+    if (!existingValue) {
+      next.values[resultValueId] = {
+        id: resultValueId,
+        canonicalExpression: evaluation.resultExpression,
+        canonicalKey: evaluation.canonicalKey,
+        displayText: evaluation.displayText,
+        protected: evaluation.canonicalKey === Expr.canonicalKey(Expr.ONE),
+        derivationIds: [],
+        createdAt: new Date().toISOString(),
+      };
+      next.valueOrder.push(resultValueId);
+    }
+
+    const fields = {
+      inputValueIds: [...inputValueIds],
+      inputNames: [...evaluation.parameterNames],
+      functionDefinition: evaluation.functionDefinition,
+      rawExpression: evaluation.rawExpression,
+      resultValueId,
+      directFormula: evaluation.directFormula,
+      rewriteSteps: evaluation.rewriteSteps,
+    };
+    if (!existingDerivation) {
+      next.derivations[derivationId] = {
+        id: derivationId,
+        formulaKey,
+        operation: "EML_COMPOSITION",
+        ...fields,
+        createdAt: new Date().toISOString(),
+      };
+      next.values[resultValueId].derivationIds.push(derivationId);
+    } else {
+      Object.assign(existingDerivation, fields);
+    }
+    next.selectedValueId = resultValueId;
+    return {
+      state: next,
+      resultValueId,
+      status: existingDerivation ? "duplicate-formula" : existingValue ? "added-formula" : "added-value",
+    };
+  }
+
   function isReferenced(state, valueId) {
     return Object.values(state.derivations).some(
-      (derivation) => derivation.xValueId === valueId || derivation.yValueId === valueId
+      (derivation) => derivationInputIds(derivation).includes(valueId)
     );
   }
 
@@ -122,6 +194,9 @@
     next.valueOrder = next.valueOrder.filter((id) => id !== valueId);
     if (next.inputXId === valueId) next.inputXId = null;
     if (next.inputYId === valueId) next.inputYId = null;
+    if (Array.isArray(next.customFunction?.inputValueIds)) {
+      next.customFunction.inputValueIds = next.customFunction.inputValueIds.map((id) => id === valueId ? null : id);
+    }
     if (next.selectedValueId === valueId) next.selectedValueId = null;
     return { state: next, status: "deleted" };
   }
@@ -142,6 +217,41 @@
     const next = cloneState(state);
     if (inputName === "x") next.inputXId = valueId;
     if (inputName === "y") next.inputYId = valueId;
+    return next;
+  }
+
+  function getCustomFunction(state) {
+    const custom = state?.customFunction;
+    if (!custom || typeof custom.definitionText !== "string" || !Array.isArray(custom.inputValueIds)) {
+      return emptyCustomFunction();
+    }
+    return {
+      definitionText: custom.definitionText,
+      inputValueIds: custom.inputValueIds.slice(0, MAX_CUSTOM_INPUTS),
+    };
+  }
+
+  function setCustomFunction(state, definitionText, inputCount) {
+    if (typeof definitionText !== "string" || !Number.isInteger(inputCount) || inputCount < 1 || inputCount > MAX_CUSTOM_INPUTS) {
+      return state;
+    }
+    const next = cloneState(state);
+    const previousInputs = getCustomFunction(state).inputValueIds;
+    next.customFunction = {
+      definitionText,
+      inputValueIds: Array.from({ length: inputCount }, (_, index) => previousInputs[index] || null),
+    };
+    return next;
+  }
+
+  function setCustomInput(state, inputIndex, valueId) {
+    const custom = getCustomFunction(state);
+    if (!state.values[valueId] || !Number.isInteger(inputIndex) || inputIndex < 0 || inputIndex >= custom.inputValueIds.length) {
+      return state;
+    }
+    const next = cloneState(state);
+    next.customFunction = custom;
+    next.customFunction.inputValueIds[inputIndex] = valueId;
     return next;
   }
 
@@ -172,14 +282,26 @@
         derivations: value.derivationIds.map((derivationId) => {
           const derivation = state.derivations[derivationId];
           if (!derivation) return { type: "missing-derivation", derivationId };
-          return {
+          const inputIds = derivationInputIds(derivation);
+          const inputNames = Array.isArray(derivation.inputNames)
+            ? derivation.inputNames
+            : ["x", "y"];
+          const inputs = inputIds.map((inputId, index) => ({
+            name: inputNames[index] || `参数 ${index + 1}`,
+            node: buildNode(inputId, nextPath, depth + 1),
+          }));
+          const treeDerivation = {
             type: "derivation",
             derivationId,
             directFormula: derivation.directFormula,
             rewriteSteps: derivation.rewriteSteps,
-            x: buildNode(derivation.xValueId, nextPath, depth + 1),
-            y: buildNode(derivation.yValueId, nextPath, depth + 1),
+            inputs,
           };
+          if (derivation.operation === "EML") {
+            treeDerivation.x = inputs[0]?.node;
+            treeDerivation.y = inputs[1]?.node;
+          }
+          return treeDerivation;
         }),
       };
     }
@@ -192,7 +314,7 @@
     if (node.type === "deferred") return true;
     if (!Array.isArray(node.derivations)) return false;
     return node.derivations.some((derivation) => (
-      derivation && (treeHasDeferredBranches(derivation.x) || treeHasDeferredBranches(derivation.y))
+      derivation && Array.isArray(derivation.inputs) && derivation.inputs.some((input) => treeHasDeferredBranches(input.node))
     ));
   }
 
@@ -214,14 +336,21 @@
     DEFAULT_TREE_DEPTH,
     MAX_TREE_DEPTH,
     MAX_TREE_NODES,
+    MAX_CUSTOM_INPUTS,
     valueIdFor,
     formulaKeyFor,
+    compositionFormulaKeyFor,
+    derivationInputIds,
     createInitialState,
     addEvaluation,
+    addCompositionEvaluation,
     deleteValue,
     clearNonInitial,
     selectValue,
     setInput,
+    getCustomFunction,
+    setCustomFunction,
+    setCustomInput,
     isReferenced,
     buildValueTree,
     treeHasDeferredBranches,

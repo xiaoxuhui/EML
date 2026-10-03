@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const Expr = require("../src/expression.js");
 const Persistence = require("../src/persistence.js");
 const Store = require("../src/value-store.js");
+const Composition = require("../src/eml-composition.js");
 
 test("表达式校验拒绝未知常量和伪整数", () => {
   assert.equal(Expr.isValidExpression({ type: "constant", name: "bogus" }), false);
@@ -52,4 +53,20 @@ test("依赖循环使用线性图检查拒绝", () => {
 
 test("导入文本大小受到限制", () => {
   assert.equal(Persistence.deserialize(" ".repeat(Persistence.MAX_IMPORT_BYTES + 1)).error, "文件大小超过限制");
+});
+
+test("UCF09 旧 V2 保存文件和组合函数来源均可校验", () => {
+  const oldState = Store.createInitialState();
+  delete oldState.customFunction;
+  assert.equal(Persistence.validateState(oldState).ok, true);
+
+  const parsed = Composition.parseDefinition("F(x, y, z) = EML(EML(x, y), z)");
+  const evaluation = Composition.evaluate(parsed.definition, [Expr.ONE, Expr.ONE, Expr.ONE]);
+  const added = Store.addCompositionEvaluation(
+    Store.createInitialState(), evaluation,
+    [Store.initialValueId, Store.initialValueId, Store.initialValueId]
+  );
+  const restored = Persistence.deserialize(Persistence.serialize(added.state));
+  assert.equal(restored.ok, true);
+  assert.equal(restored.state.customFunction.definitionText, "");
 });

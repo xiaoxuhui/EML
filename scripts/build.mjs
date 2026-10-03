@@ -16,6 +16,7 @@ const scriptFiles = [
   "rules-algebra.js",
   "formula-rules.js",
   "evaluator.js",
+  "eml-composition.js",
   "value-store.js",
   "persistence.js",
   "tree-viewport.js",
