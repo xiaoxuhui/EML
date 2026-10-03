@@ -35,6 +35,7 @@
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     treeExpandMore: document.getElementById("treeExpandMore"),
+    customCalculator: document.getElementById("customCalculator"),
     customDefinition: document.getElementById("customDefinition"),
     customApply: document.getElementById("customApplyButton"),
     customDefinitionStatus: document.getElementById("customDefinitionStatus"),
@@ -172,14 +173,13 @@
       customDefinition ? `已应用：${customDefinition.displayText}` : "只支持参数名与 EML(...) 的嵌套组合。"
     );
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
-    elements.customFormulaLine.hidden = !customDefinition;
+    elements.customCalculator.hidden = !customDefinition;
     elements.customInputSlots.replaceChildren();
 
     if (!customDefinition) {
       elements.customResult.textContent = "?";
       elements.customResult.classList.remove("error");
       elements.customAdd.disabled = true;
-      elements.customDirectPreview.textContent = customDefinitionError || "输入 EML 组合函数后开始计算。";
       return;
     }
 

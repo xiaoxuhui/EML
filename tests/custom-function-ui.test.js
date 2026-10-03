@@ -6,12 +6,14 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("组合函数界面嵌入原计算区并具备定义、动态槽位和添加控件", () => {
+test("组合函数界面嵌入原计算区，应用定义后在 EML 下方显示独立计算行", () => {
   const template = read("src/template.html");
   const calculatorStart = template.indexOf('<section class="calculator"');
   const calculatorEnd = template.indexOf("</section>", calculatorStart);
   const composer = template.indexOf('class="custom-composer"');
+  const customCalculator = template.indexOf('id="customCalculator"');
   assert.ok(composer > calculatorStart && composer < calculatorEnd);
+  assert.ok(customCalculator > calculatorStart && customCalculator < composer);
   for (const id of ["customDefinition", "customApplyButton", "customInputSlots", "customResultOutput", "customAddButton"]) {
     assert.match(template, new RegExp(`id="${id}"`));
   }
