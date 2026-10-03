@@ -35,6 +35,7 @@
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     treeExpandMore: document.getElementById("treeExpandMore"),
+    customApplicationEmpty: document.getElementById("customApplicationEmpty"),
     customCalculator: document.getElementById("customCalculator"),
     customDefinition: document.getElementById("customDefinition"),
     customApply: document.getElementById("customApplyButton"),
@@ -174,6 +175,7 @@
     );
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
     elements.customCalculator.hidden = !customDefinition;
+    elements.customApplicationEmpty.hidden = Boolean(customDefinition);
     elements.customInputSlots.replaceChildren();
 
     if (!customDefinition) {

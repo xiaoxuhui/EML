@@ -100,8 +100,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .danger-button { color: var(--danger); border-color: #d8a7a8; }
 .danger-button:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
 
-.calculator, .values-section, .details-section { padding: 22px 24px; }
-.calculator, .values-section { border-bottom: 1px solid var(--line); }
+.calculator, .function-application-section, .function-definition-section, .values-section, .details-section { padding: 22px 24px; }
+.calculator, .function-application-section, .function-definition-section, .values-section { border-bottom: 1px solid var(--line); }
 
 .formula-line {
   display: flex;
@@ -156,9 +156,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .notice { min-height: 22px; margin-top: 4px; color: var(--warm); font-size: 13px; }
 .notice.error { color: var(--danger); }
 
-.custom-calculator { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
-.custom-calculator h3, .custom-composer h3 { margin-bottom: 10px; }
-.custom-composer { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.function-application-empty { min-height: 64px; display: flex; align-items: center; color: var(--muted); }
+.custom-calculator { margin-top: 0; }
 .custom-definition-row { display: flex; align-items: center; gap: 8px; }
 .custom-definition-row label { flex: 0 0 auto; color: #34434d; font-size: 14px; }
 .custom-definition-input {
@@ -329,7 +328,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   .app-shell { width: 100%; margin: 0; border-left: 0; border-right: 0; }
   .app-header { align-items: flex-start; flex-direction: column; padding: 18px 16px; }
   .file-actions { justify-content: flex-start; }
-  .calculator, .values-section, .details-section { padding: 20px 16px; }
+  .calculator, .function-application-section, .function-definition-section, .values-section, .details-section { padding: 20px 16px; }
   .formula-line { gap: 7px; flex-wrap: wrap; overflow-x: visible; }
   .formula-name, .formula-punctuation { font-size: 21px; }
   .custom-definition-row { align-items: stretch; flex-wrap: wrap; }
@@ -375,9 +374,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       </div>
       <div class="direct-preview" id="directPreview">等待 x、y</div>
       <div class="notice" id="notice" role="status" aria-live="polite"></div>
+    </section>
 
-      <div class="custom-calculator" id="customCalculator" aria-labelledby="customFunctionTitle" hidden>
-        <h3 id="customFunctionTitle">自定义函数</h3>
+    <section class="function-application-section" aria-labelledby="functionApplicationTitle">
+      <h2 id="functionApplicationTitle">函数应用</h2>
+      <div class="function-application-empty" id="customApplicationEmpty">请先在下方定义函数。</div>
+      <div class="custom-calculator" id="customCalculator" hidden>
         <div class="formula-line custom-formula-line" id="customFormulaLine">
           <span class="formula-name" id="customFunctionName"></span>
           <span class="custom-input-slots" id="customInputSlots"></span>
@@ -387,17 +389,17 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         </div>
         <div class="direct-preview" id="customDirectPreview">等待函数输入</div>
       </div>
+    </section>
 
-      <div class="custom-composer" aria-labelledby="customDefinitionTitle">
-        <h3 id="customDefinitionTitle">函数定义</h3>
-        <div class="custom-definition-row">
-          <label for="customDefinition">函数定义</label>
-          <input id="customDefinition" class="custom-definition-input" type="text"
-            placeholder="例如 F(x, y, z) = EML(EML(x, y), z)" autocomplete="off">
-          <button type="button" id="customApplyButton">应用函数</button>
-        </div>
-        <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
+    <section class="function-definition-section" aria-labelledby="customDefinitionTitle">
+      <h2 id="customDefinitionTitle">函数定义</h2>
+      <div class="custom-definition-row">
+        <label for="customDefinition">定义</label>
+        <input id="customDefinition" class="custom-definition-input" type="text"
+          placeholder="例如 f(x) = EML(x, 1)" autocomplete="off">
+        <button type="button" id="customApplyButton">保存定义</button>
       </div>
+      <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
     </section>
 
     <section class="values-section" aria-labelledby="valuesTitle">
@@ -2619,6 +2621,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     treeExpandMore: document.getElementById("treeExpandMore"),
+    customApplicationEmpty: document.getElementById("customApplicationEmpty"),
     customCalculator: document.getElementById("customCalculator"),
     customDefinition: document.getElementById("customDefinition"),
     customApply: document.getElementById("customApplyButton"),
@@ -2758,6 +2761,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     );
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
     elements.customCalculator.hidden = !customDefinition;
+    elements.customApplicationEmpty.hidden = Boolean(customDefinition);
     elements.customInputSlots.replaceChildren();
 
     if (!customDefinition) {

@@ -40,9 +40,12 @@
       </div>
       <div class="direct-preview" id="directPreview">等待 x、y</div>
       <div class="notice" id="notice" role="status" aria-live="polite"></div>
+    </section>
 
-      <div class="custom-calculator" id="customCalculator" aria-labelledby="customFunctionTitle" hidden>
-        <h3 id="customFunctionTitle">自定义函数</h3>
+    <section class="function-application-section" aria-labelledby="functionApplicationTitle">
+      <h2 id="functionApplicationTitle">函数应用</h2>
+      <div class="function-application-empty" id="customApplicationEmpty">请先在下方定义函数。</div>
+      <div class="custom-calculator" id="customCalculator" hidden>
         <div class="formula-line custom-formula-line" id="customFormulaLine">
           <span class="formula-name" id="customFunctionName"></span>
           <span class="custom-input-slots" id="customInputSlots"></span>
@@ -52,17 +55,17 @@
         </div>
         <div class="direct-preview" id="customDirectPreview">等待函数输入</div>
       </div>
+    </section>
 
-      <div class="custom-composer" aria-labelledby="customDefinitionTitle">
-        <h3 id="customDefinitionTitle">函数定义</h3>
-        <div class="custom-definition-row">
-          <label for="customDefinition">函数定义</label>
-          <input id="customDefinition" class="custom-definition-input" type="text"
-            placeholder="例如 F(x, y, z) = EML(EML(x, y), z)" autocomplete="off">
-          <button type="button" id="customApplyButton">应用函数</button>
-        </div>
-        <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
+    <section class="function-definition-section" aria-labelledby="customDefinitionTitle">
+      <h2 id="customDefinitionTitle">函数定义</h2>
+      <div class="custom-definition-row">
+        <label for="customDefinition">定义</label>
+        <input id="customDefinition" class="custom-definition-input" type="text"
+          placeholder="例如 f(x) = EML(x, 1)" autocomplete="off">
+        <button type="button" id="customApplyButton">保存定义</button>
       </div>
+      <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
     </section>
 
     <section class="values-section" aria-labelledby="valuesTitle">
