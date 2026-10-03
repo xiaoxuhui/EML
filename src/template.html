@@ -40,6 +40,25 @@
       </div>
       <div class="direct-preview" id="directPreview">等待 x、y</div>
       <div class="notice" id="notice" role="status" aria-live="polite"></div>
+
+      <div class="custom-composer" aria-labelledby="customFunctionTitle">
+        <h3 id="customFunctionTitle">EML 组合函数</h3>
+        <div class="custom-definition-row">
+          <label for="customDefinition">函数定义</label>
+          <input id="customDefinition" class="custom-definition-input" type="text"
+            placeholder="例如 F(x, y, z) = EML(EML(x, y), z)" autocomplete="off">
+          <button type="button" id="customApplyButton">应用函数</button>
+        </div>
+        <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
+        <div class="formula-line custom-formula-line" id="customFormulaLine" hidden>
+          <span class="formula-name" id="customFunctionName"></span>
+          <span class="custom-input-slots" id="customInputSlots"></span>
+          <span class="formula-punctuation">) =</span>
+          <output class="result-slot" id="customResultOutput" aria-live="polite">?</output>
+          <button type="button" class="primary-button add-button" id="customAddButton" disabled>添加</button>
+        </div>
+        <div class="direct-preview" id="customDirectPreview">输入 EML 组合函数后开始计算。</div>
+      </div>
     </section>
 
     <section class="values-section" aria-labelledby="valuesTitle">

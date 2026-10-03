@@ -7,6 +7,7 @@
   const Persistence = root.EMLPersistence;
   const TreeController = root.EMLTreeController;
   const Trace = root.EMLDerivationTrace;
+  const Composition = root.EMLComposition;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -34,10 +35,22 @@
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     treeExpandMore: document.getElementById("treeExpandMore"),
+    customDefinition: document.getElementById("customDefinition"),
+    customApply: document.getElementById("customApplyButton"),
+    customDefinitionStatus: document.getElementById("customDefinitionStatus"),
+    customFormulaLine: document.getElementById("customFormulaLine"),
+    customFunctionName: document.getElementById("customFunctionName"),
+    customInputSlots: document.getElementById("customInputSlots"),
+    customResult: document.getElementById("customResultOutput"),
+    customAdd: document.getElementById("customAddButton"),
+    customDirectPreview: document.getElementById("customDirectPreview"),
   };
 
   let state = restoreState();
   let preview = null;
+  let customDefinition = null;
+  let customPreview = null;
+  let customDefinitionError = "";
   let pointerDrag = null;
   let suppressValueClick = false;
   let treeDepth = Store.DEFAULT_TREE_DEPTH;
@@ -88,6 +101,31 @@
     const x = currentValue(state.inputXId);
     const y = currentValue(state.inputYId);
     preview = x && y ? Evaluator.evaluateEML(x.canonicalExpression, y.canonicalExpression) : null;
+    recomputeCustomPreview();
+  }
+
+  function recomputeCustomPreview() {
+    const custom = Store.getCustomFunction(state);
+    customDefinition = null;
+    customPreview = null;
+    customDefinitionError = "";
+    if (!custom.definitionText) return;
+    const parsed = Composition.parseDefinition(custom.definitionText);
+    if (!parsed.ok) {
+      customDefinitionError = parsed.error;
+      return;
+    }
+    customDefinition = parsed.definition;
+    if (custom.inputValueIds.length !== customDefinition.parameterNames.length) {
+      customDefinitionError = "函数输入状态无效，请重新应用函数。";
+      return;
+    }
+    const inputs = custom.inputValueIds.map(currentValue);
+    if (inputs.some((value) => !value)) return;
+    customPreview = Composition.evaluate(
+      customDefinition,
+      inputs.map((value) => value.canonicalExpression)
+    );
   }
 
   function renderSlot(element, value, placeholder) {
@@ -125,6 +163,63 @@
     elements.result.textContent = preview.displayText;
     elements.directPreview.textContent = preview.directFormula;
     elements.add.disabled = false;
+  }
+
+  function renderCustomCalculator() {
+    const custom = Store.getCustomFunction(state);
+    elements.customDefinition.value = custom.definitionText;
+    elements.customDefinitionStatus.textContent = customDefinitionError || (
+      customDefinition ? `已应用：${customDefinition.displayText}` : "只支持参数名与 EML(...) 的嵌套组合。"
+    );
+    elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
+    elements.customFormulaLine.hidden = !customDefinition;
+    elements.customInputSlots.replaceChildren();
+
+    if (!customDefinition) {
+      elements.customResult.textContent = "?";
+      elements.customResult.classList.remove("error");
+      elements.customAdd.disabled = true;
+      elements.customDirectPreview.textContent = customDefinitionError || "输入 EML 组合函数后开始计算。";
+      return;
+    }
+
+    elements.customFunctionName.textContent = `${customDefinition.name}(`;
+    customDefinition.parameterNames.forEach((name, index) => {
+      if (index > 0) {
+        const comma = document.createElement("span");
+        comma.className = "formula-punctuation";
+        comma.textContent = ",";
+        elements.customInputSlots.appendChild(comma);
+      }
+      const slot = document.createElement("button");
+      slot.type = "button";
+      slot.className = "input-slot";
+      slot.dataset.slot = `custom:${index}`;
+      slot.setAttribute("aria-label", `${name} 输入位置`);
+      renderSlot(slot, currentValue(custom.inputValueIds[index]), name);
+      bindSlot(slot, slot.dataset.slot);
+      elements.customInputSlots.appendChild(slot);
+    });
+
+    const invalid = Boolean(customPreview && (!customPreview.ok || customPreview.limitReached));
+    elements.customResult.classList.toggle("error", invalid);
+    if (!customPreview) {
+      elements.customResult.textContent = "?";
+      elements.customDirectPreview.textContent = "等待全部参数。";
+      elements.customAdd.disabled = true;
+      return;
+    }
+    if (!customPreview.ok) {
+      elements.customResult.textContent = "未定义";
+      elements.customDirectPreview.textContent = customPreview.error;
+      elements.customAdd.disabled = true;
+      return;
+    }
+    elements.customResult.textContent = customPreview.displayText;
+    elements.customDirectPreview.textContent = customPreview.limitReached
+      ? "化简达到安全上限，当前结果尚不能添加。"
+      : customPreview.directFormula;
+    elements.customAdd.disabled = Boolean(customPreview.limitReached);
   }
 
   function makeDeleteButton(valueId) {
@@ -252,8 +347,10 @@
 
     const inputs = document.createElement("ul");
     inputs.className = "tree-inputs";
-    appendValueBranch(inputs, "x", derivation.x);
-    appendValueBranch(inputs, "y", derivation.y);
+    const branches = Array.isArray(derivation.inputs)
+      ? derivation.inputs
+      : [{ name: "x", node: derivation.x }, { name: "y", node: derivation.y }];
+    branches.forEach((input) => appendValueBranch(inputs, input.name, input.node));
     details.appendChild(inputs);
     return details;
   }
@@ -299,7 +396,10 @@
     if (step.kind === "derived") {
       const inputs = document.createElement("div");
       inputs.className = "trace-step-inputs";
-      inputs.textContent = `x = ${describeTraceRef(step.x)} · y = ${describeTraceRef(step.y)}`;
+      const refs = Array.isArray(step.inputs)
+        ? step.inputs
+        : [{ name: "x", value: step.x }, { name: "y", value: step.y }];
+      inputs.textContent = refs.map((input) => `${input.name} = ${describeTraceRef(input.value)}`).join(" · ");
       item.appendChild(inputs);
 
       if (step.rewriteSteps && step.rewriteSteps.length) {
@@ -408,6 +508,7 @@
 
   function render() {
     renderCalculator();
+    renderCustomCalculator();
     renderValues();
     renderDetails();
   }
@@ -417,7 +518,11 @@
       showNotice("拖入的数值无效。", true);
       return;
     }
-    state = Store.setInput(state, slotName, valueId);
+    if (slotName.startsWith("custom:")) {
+      state = Store.setCustomInput(state, Number(slotName.slice("custom:".length)), valueId);
+    } else {
+      state = Store.setInput(state, slotName, valueId);
+    }
     recomputePreview();
     persistState();
     showNotice("");
@@ -449,6 +554,22 @@
   bindSlot(elements.slotX, "x");
   bindSlot(elements.slotY, "y");
 
+  elements.customApply.addEventListener("click", () => {
+    const parsed = Composition.parseDefinition(elements.customDefinition.value);
+    if (!parsed.ok) {
+      customDefinitionError = parsed.error;
+      customDefinition = null;
+      customPreview = null;
+      renderCustomCalculator();
+      return;
+    }
+    state = Store.setCustomFunction(state, parsed.definition.displayText, parsed.definition.parameterNames.length);
+    recomputePreview();
+    persistState();
+    showNotice("已应用 EML 组合函数。", false);
+    render();
+  });
+
   elements.add.addEventListener("click", () => {
     if (!preview || !preview.ok || !state.inputXId || !state.inputYId) return;
     const result = Store.addEvaluation(state, preview, state.inputXId, state.inputYId);
@@ -460,6 +581,21 @@
       "duplicate-formula": "该数值和公式已经存在。",
     };
     showNotice(messages[result.status] || "无法添加当前结果。", result.status === "invalid");
+    render();
+  });
+
+  elements.customAdd.addEventListener("click", () => {
+    const custom = Store.getCustomFunction(state);
+    if (!customPreview || !customPreview.ok || customPreview.limitReached || custom.inputValueIds.some((id) => !id)) return;
+    const result = Store.addCompositionEvaluation(state, customPreview, custom.inputValueIds);
+    state = result.state;
+    persistState();
+    const messages = {
+      "added-value": "已添加组合函数结果和公式来源。",
+      "added-formula": "数值已存在，已添加新的组合函数来源。",
+      "duplicate-formula": "该组合函数公式已经存在。",
+    };
+    showNotice(messages[result.status] || "无法添加当前组合函数结果。", result.status === "invalid");
     render();
   });
 

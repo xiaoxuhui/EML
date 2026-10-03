@@ -156,6 +156,28 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .notice { min-height: 22px; margin-top: 4px; color: var(--warm); font-size: 13px; }
 .notice.error { color: var(--danger); }
 
+.custom-composer { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.custom-composer h3 { margin-bottom: 10px; }
+.custom-definition-row { display: flex; align-items: center; gap: 8px; }
+.custom-definition-row label { flex: 0 0 auto; color: #34434d; font-size: 14px; }
+.custom-definition-input {
+  flex: 1 1 360px;
+  min-width: 180px;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fbfcfc;
+  color: #24313b;
+  font-family: Cambria, "Times New Roman", serif;
+}
+.custom-definition-input:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+.custom-definition-status { min-height: 20px; margin-top: 5px; color: var(--muted); font-size: 13px; }
+.custom-definition-status.error { color: var(--danger); }
+.custom-formula-line { min-height: 56px; margin-top: 4px; }
+.custom-input-slots { display: inline-flex; align-items: center; gap: 9px; flex: 0 1 auto; }
+.custom-input-slots .formula-punctuation { font-size: 25px; }
+
 .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .section-heading > div { display: flex; align-items: baseline; gap: 10px; }
 .count { color: var(--muted); font-size: 12px; }
@@ -309,6 +331,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   .calculator, .values-section, .details-section { padding: 20px 16px; }
   .formula-line { gap: 7px; flex-wrap: wrap; overflow-x: visible; }
   .formula-name, .formula-punctuation { font-size: 21px; }
+  .custom-definition-row { align-items: stretch; flex-wrap: wrap; }
+  .custom-definition-input { flex-basis: 100%; width: 100%; }
+  .custom-input-slots { gap: 7px; flex-wrap: wrap; }
+  .custom-input-slots .formula-punctuation { font-size: 21px; }
   .input-slot { width: 96px; }
   .result-slot { width: min(240px, 100%); }
   .value-button { max-width: calc(100vw - 32px); }
@@ -348,6 +374,25 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       </div>
       <div class="direct-preview" id="directPreview">等待 x、y</div>
       <div class="notice" id="notice" role="status" aria-live="polite"></div>
+
+      <div class="custom-composer" aria-labelledby="customFunctionTitle">
+        <h3 id="customFunctionTitle">EML 组合函数</h3>
+        <div class="custom-definition-row">
+          <label for="customDefinition">函数定义</label>
+          <input id="customDefinition" class="custom-definition-input" type="text"
+            placeholder="例如 F(x, y, z) = EML(EML(x, y), z)" autocomplete="off">
+          <button type="button" id="customApplyButton">应用函数</button>
+        </div>
+        <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
+        <div class="formula-line custom-formula-line" id="customFormulaLine" hidden>
+          <span class="formula-name" id="customFunctionName"></span>
+          <span class="custom-input-slots" id="customInputSlots"></span>
+          <span class="formula-punctuation">) =</span>
+          <output class="result-slot" id="customResultOutput" aria-live="polite">?</output>
+          <button type="button" class="primary-button add-button" id="customAddButton" disabled>添加</button>
+        </div>
+        <div class="direct-preview" id="customDirectPreview">输入 EML 组合函数后开始计算。</div>
+      </div>
     </section>
 
     <section class="values-section" aria-labelledby="valuesTitle">
@@ -1515,6 +1560,174 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 });
 
 
+/* eml-composition.js */
+(function (root, factory) {
+  "use strict";
+  const expression = typeof module === "object" && module.exports
+    ? require("./expression.js")
+    : root.EMLExpression;
+  const evaluator = typeof module === "object" && module.exports
+    ? require("./evaluator.js")
+    : root.EMLEvaluator;
+  const api = factory(expression, evaluator);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLComposition = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Evaluator) {
+  "use strict";
+
+  const MAX_PARAMETERS = 6;
+  const MAX_NESTING = 16;
+  const MAX_DEFINITION_LENGTH = 1000;
+  const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+  function renderBody(node) {
+    if (node.type === "parameter") return node.name;
+    return `EML(${renderBody(node.left)}, ${renderBody(node.right)})`;
+  }
+
+  function renderDefinition(definition) {
+    return `${definition.name}(${definition.parameterNames.join(", ")}) = ${renderBody(definition.body)}`;
+  }
+
+  function parseDefinition(text) {
+    if (typeof text !== "string" || text.trim().length === 0) {
+      return { ok: false, error: "请输入 EML 组合函数定义。" };
+    }
+    if (text.length > MAX_DEFINITION_LENGTH) return { ok: false, error: "函数定义过长。" };
+
+    let index = 0;
+    const source = text.trim();
+    const skipWhitespace = () => {
+      while (/\s/.test(source[index] || "")) index += 1;
+    };
+    const consume = (token) => {
+      skipWhitespace();
+      if (!source.startsWith(token, index)) return false;
+      index += token.length;
+      return true;
+    };
+    const identifier = () => {
+      skipWhitespace();
+      const match = /^[A-Za-z][A-Za-z0-9_]*/.exec(source.slice(index));
+      if (!match) return null;
+      index += match[0].length;
+      return match[0];
+    };
+    const fail = (error) => ({ ok: false, error });
+
+    const name = identifier();
+    if (!name) return fail("函数名必须以英文字母开头。");
+    if (!consume("(")) return fail("函数名后需要左括号。");
+
+    const parameterNames = [];
+    while (true) {
+      const parameter = identifier();
+      if (!parameter) return fail("参数名必须以英文字母开头。");
+      if (parameter === "EML") return fail("EML 是保留名称，不能作为参数名。");
+      if (parameterNames.includes(parameter)) return fail(`参数 ${parameter} 重复。`);
+      parameterNames.push(parameter);
+      if (parameterNames.length > MAX_PARAMETERS) return fail(`最多支持 ${MAX_PARAMETERS} 个参数。`);
+      if (consume(")")) break;
+      if (!consume(",")) return fail("参数之间需要逗号。");
+    }
+    if (!consume("=")) return fail("参数列表后需要等号。");
+
+    function parseBody(depth) {
+      if (depth > MAX_NESTING) return { error: `EML 嵌套不能超过 ${MAX_NESTING} 层。` };
+      const token = identifier();
+      if (!token) return { error: "函数体只能使用参数名或 EML(...)。" };
+      if (token !== "EML") {
+        if (!parameterNames.includes(token)) return { error: `参数 ${token} 未声明。` };
+        return { node: { type: "parameter", name: token } };
+      }
+      if (!consume("(")) return { error: "EML 后需要左括号。" };
+      const left = parseBody(depth + 1);
+      if (left.error) return left;
+      if (!consume(",")) return { error: "EML 的两个参数之间需要逗号。" };
+      const right = parseBody(depth + 1);
+      if (right.error) return right;
+      if (!consume(")")) return { error: "EML 调用缺少右括号。" };
+      return { node: { type: "eml", left: left.node, right: right.node } };
+    }
+
+    const body = parseBody(1);
+    if (body.error) return fail(body.error);
+    skipWhitespace();
+    if (index !== source.length) return fail("函数定义末尾存在无法识别的内容。");
+    if (body.node.type !== "eml") return fail("函数体至少需要一个 EML 调用。");
+
+    const definition = { name, parameterNames, body: body.node };
+    const displayText = renderDefinition(definition);
+    return {
+      ok: true,
+      definition: { ...definition, displayText, canonicalKey: displayText.replace(/\s/g, "") },
+    };
+  }
+
+  function evaluate(definition, inputExpressions) {
+    if (!definition || !Array.isArray(definition.parameterNames) || !definition.body) {
+      return { ok: false, error: "函数定义无效。" };
+    }
+    if (!Array.isArray(inputExpressions) || inputExpressions.length !== definition.parameterNames.length) {
+      return { ok: false, error: "函数输入数量不匹配。" };
+    }
+    if (inputExpressions.some((expression) => !Expr.isValidExpression(expression))) {
+      return { ok: false, error: "函数输入无效。" };
+    }
+    const inputs = new Map(definition.parameterNames.map((name, index) => [name, inputExpressions[index]]));
+
+    function evaluateNode(node) {
+      if (node.type === "parameter") return { ok: true, expression: inputs.get(node.name), rewriteSteps: [], limitReached: false };
+      const left = evaluateNode(node.left);
+      if (!left.ok) return left;
+      const right = evaluateNode(node.right);
+      if (!right.ok) return right;
+      const result = Evaluator.evaluateEML(left.expression, right.expression);
+      if (!result.ok) return result;
+      return {
+        ok: true,
+        expression: result.resultExpression,
+        rawExpression: result.rawExpression,
+        rewriteSteps: [...left.rewriteSteps, ...right.rewriteSteps, ...result.rewriteSteps],
+        limitReached: left.limitReached || right.limitReached || result.limitReached,
+      };
+    }
+
+    const calculated = evaluateNode(definition.body);
+    if (!calculated.ok) return calculated;
+    const displayText = Expr.render(calculated.expression);
+    const inputText = inputExpressions.map((expression) => Expr.render(expression)).join(", ");
+    return {
+      ok: true,
+      operation: "EML_COMPOSITION",
+      functionDefinition: definition.displayText || renderDefinition(definition),
+      definitionKey: definition.canonicalKey || renderDefinition(definition).replace(/\s/g, ""),
+      parameterNames: [...definition.parameterNames],
+      inputExpressions,
+      rawExpression: calculated.rawExpression || calculated.expression,
+      resultExpression: calculated.expression,
+      canonicalKey: Expr.canonicalKey(calculated.expression),
+      displayText,
+      directFormula: `${definition.name}(${inputText}) = ${displayText}`,
+      rewriteSteps: calculated.rewriteSteps,
+      limitReached: calculated.limitReached,
+      approximation: Expr.approximate(calculated.expression),
+    };
+  }
+
+  return {
+    MAX_PARAMETERS,
+    MAX_NESTING,
+    MAX_DEFINITION_LENGTH,
+    IDENTIFIER,
+    parseDefinition,
+    renderBody,
+    renderDefinition,
+    evaluate,
+  };
+});
+
+
 /* value-store.js */
 (function (root, factory) {
   const expression = typeof module === "object" && module.exports
@@ -1533,6 +1746,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const DEFAULT_TREE_DEPTH = 4;
   const MAX_TREE_DEPTH = 32;
   const MAX_TREE_NODES = 800;
+  const MAX_CUSTOM_INPUTS = 6;
+
+  const emptyCustomFunction = () => ({ definitionText: "", inputValueIds: [] });
 
   function createInitialValue() {
     return {
@@ -1556,6 +1772,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       inputXId: null,
       inputYId: null,
       selectedValueId: null,
+      customFunction: emptyCustomFunction(),
     };
   }
 
@@ -1563,6 +1780,16 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   function formulaKeyFor(evaluation) {
     return `eml(${Expr.canonicalKey(evaluation.xExpression)},${Expr.canonicalKey(evaluation.yExpression)})->${evaluation.canonicalKey}`;
+  }
+
+  function compositionFormulaKeyFor(evaluation) {
+    return `eml-composition(${evaluation.definitionKey}|${evaluation.inputExpressions
+      .map((expression) => Expr.canonicalKey(expression)).join(",")})->${evaluation.canonicalKey}`;
+  }
+
+  function derivationInputIds(derivation) {
+    if (Array.isArray(derivation?.inputValueIds)) return derivation.inputValueIds;
+    return derivation ? [derivation.xValueId, derivation.yValueId] : [];
   }
 
   function addEvaluation(state, evaluation, xValueId, yValueId) {
@@ -1622,9 +1849,67 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     };
   }
 
+  function addCompositionEvaluation(state, evaluation, inputValueIds) {
+    if (!evaluation || !evaluation.ok || evaluation.operation !== "EML_COMPOSITION") {
+      return { state, status: "invalid" };
+    }
+    if (!Array.isArray(inputValueIds) || inputValueIds.length !== evaluation.inputExpressions.length) {
+      return { state, status: "missing-input" };
+    }
+    if (inputValueIds.some((valueId) => !state.values[valueId])) return { state, status: "missing-input" };
+
+    const next = cloneState(state);
+    const resultValueId = valueIdFor(evaluation.canonicalKey);
+    const formulaKey = compositionFormulaKeyFor(evaluation);
+    const derivationId = derivationIdFor(formulaKey);
+    const existingValue = next.values[resultValueId];
+    const existingDerivation = next.derivations[derivationId];
+
+    if (!existingValue) {
+      next.values[resultValueId] = {
+        id: resultValueId,
+        canonicalExpression: evaluation.resultExpression,
+        canonicalKey: evaluation.canonicalKey,
+        displayText: evaluation.displayText,
+        protected: evaluation.canonicalKey === Expr.canonicalKey(Expr.ONE),
+        derivationIds: [],
+        createdAt: new Date().toISOString(),
+      };
+      next.valueOrder.push(resultValueId);
+    }
+
+    const fields = {
+      inputValueIds: [...inputValueIds],
+      inputNames: [...evaluation.parameterNames],
+      functionDefinition: evaluation.functionDefinition,
+      rawExpression: evaluation.rawExpression,
+      resultValueId,
+      directFormula: evaluation.directFormula,
+      rewriteSteps: evaluation.rewriteSteps,
+    };
+    if (!existingDerivation) {
+      next.derivations[derivationId] = {
+        id: derivationId,
+        formulaKey,
+        operation: "EML_COMPOSITION",
+        ...fields,
+        createdAt: new Date().toISOString(),
+      };
+      next.values[resultValueId].derivationIds.push(derivationId);
+    } else {
+      Object.assign(existingDerivation, fields);
+    }
+    next.selectedValueId = resultValueId;
+    return {
+      state: next,
+      resultValueId,
+      status: existingDerivation ? "duplicate-formula" : existingValue ? "added-formula" : "added-value",
+    };
+  }
+
   function isReferenced(state, valueId) {
     return Object.values(state.derivations).some(
-      (derivation) => derivation.xValueId === valueId || derivation.yValueId === valueId
+      (derivation) => derivationInputIds(derivation).includes(valueId)
     );
   }
 
@@ -1640,6 +1925,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     next.valueOrder = next.valueOrder.filter((id) => id !== valueId);
     if (next.inputXId === valueId) next.inputXId = null;
     if (next.inputYId === valueId) next.inputYId = null;
+    if (Array.isArray(next.customFunction?.inputValueIds)) {
+      next.customFunction.inputValueIds = next.customFunction.inputValueIds.map((id) => id === valueId ? null : id);
+    }
     if (next.selectedValueId === valueId) next.selectedValueId = null;
     return { state: next, status: "deleted" };
   }
@@ -1660,6 +1948,41 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const next = cloneState(state);
     if (inputName === "x") next.inputXId = valueId;
     if (inputName === "y") next.inputYId = valueId;
+    return next;
+  }
+
+  function getCustomFunction(state) {
+    const custom = state?.customFunction;
+    if (!custom || typeof custom.definitionText !== "string" || !Array.isArray(custom.inputValueIds)) {
+      return emptyCustomFunction();
+    }
+    return {
+      definitionText: custom.definitionText,
+      inputValueIds: custom.inputValueIds.slice(0, MAX_CUSTOM_INPUTS),
+    };
+  }
+
+  function setCustomFunction(state, definitionText, inputCount) {
+    if (typeof definitionText !== "string" || !Number.isInteger(inputCount) || inputCount < 1 || inputCount > MAX_CUSTOM_INPUTS) {
+      return state;
+    }
+    const next = cloneState(state);
+    const previousInputs = getCustomFunction(state).inputValueIds;
+    next.customFunction = {
+      definitionText,
+      inputValueIds: Array.from({ length: inputCount }, (_, index) => previousInputs[index] || null),
+    };
+    return next;
+  }
+
+  function setCustomInput(state, inputIndex, valueId) {
+    const custom = getCustomFunction(state);
+    if (!state.values[valueId] || !Number.isInteger(inputIndex) || inputIndex < 0 || inputIndex >= custom.inputValueIds.length) {
+      return state;
+    }
+    const next = cloneState(state);
+    next.customFunction = custom;
+    next.customFunction.inputValueIds[inputIndex] = valueId;
     return next;
   }
 
@@ -1690,14 +2013,26 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         derivations: value.derivationIds.map((derivationId) => {
           const derivation = state.derivations[derivationId];
           if (!derivation) return { type: "missing-derivation", derivationId };
-          return {
+          const inputIds = derivationInputIds(derivation);
+          const inputNames = Array.isArray(derivation.inputNames)
+            ? derivation.inputNames
+            : ["x", "y"];
+          const inputs = inputIds.map((inputId, index) => ({
+            name: inputNames[index] || `参数 ${index + 1}`,
+            node: buildNode(inputId, nextPath, depth + 1),
+          }));
+          const treeDerivation = {
             type: "derivation",
             derivationId,
             directFormula: derivation.directFormula,
             rewriteSteps: derivation.rewriteSteps,
-            x: buildNode(derivation.xValueId, nextPath, depth + 1),
-            y: buildNode(derivation.yValueId, nextPath, depth + 1),
+            inputs,
           };
+          if (derivation.operation === "EML") {
+            treeDerivation.x = inputs[0]?.node;
+            treeDerivation.y = inputs[1]?.node;
+          }
+          return treeDerivation;
         }),
       };
     }
@@ -1710,7 +2045,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (node.type === "deferred") return true;
     if (!Array.isArray(node.derivations)) return false;
     return node.derivations.some((derivation) => (
-      derivation && (treeHasDeferredBranches(derivation.x) || treeHasDeferredBranches(derivation.y))
+      derivation && Array.isArray(derivation.inputs) && derivation.inputs.some((input) => treeHasDeferredBranches(input.node))
     ));
   }
 
@@ -1732,14 +2067,21 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     DEFAULT_TREE_DEPTH,
     MAX_TREE_DEPTH,
     MAX_TREE_NODES,
+    MAX_CUSTOM_INPUTS,
     valueIdFor,
     formulaKeyFor,
+    compositionFormulaKeyFor,
+    derivationInputIds,
     createInitialState,
     addEvaluation,
+    addCompositionEvaluation,
     deleteValue,
     clearNonInitial,
     selectValue,
     setInput,
+    getCustomFunction,
+    setCustomFunction,
+    setCustomInput,
     isReferenced,
     buildValueTree,
     treeHasDeferredBranches,
@@ -1784,7 +2126,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       const value = state.values[valueId];
       for (const derivationId of value.derivationIds) {
         const derivation = state.derivations[derivationId];
-        if (derivation && (visit(derivation.xValueId) || visit(derivation.yValueId))) return true;
+        if (derivation && ValueStore.derivationInputIds(derivation).some(visit)) return true;
       }
       visiting.delete(valueId);
       visited.add(valueId);
@@ -1821,11 +2163,26 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
     for (const [derivationId, derivation] of Object.entries(candidate.derivations)) {
       if (!derivation || derivation.id !== derivationId) return { ok: false, error: "存在无效公式" };
-      if (!candidate.values[derivation.xValueId] || !candidate.values[derivation.yValueId] || !candidate.values[derivation.resultValueId]) {
+      const inputValueIds = ValueStore.derivationInputIds(derivation);
+      if (inputValueIds.length === 0 || inputValueIds.some((valueId) => !candidate.values[valueId]) || !candidate.values[derivation.resultValueId]) {
         return { ok: false, error: "公式引用了不存在的数值" };
       }
-      if (derivation.operation !== "EML" || !isShortString(derivation.directFormula)) {
+      if (!isShortString(derivation.directFormula)) {
         return { ok: false, error: "公式内容无效" };
+      }
+      if (derivation.operation === "EML") {
+        if (inputValueIds.length !== 2 || !candidate.values[derivation.xValueId] || !candidate.values[derivation.yValueId]) {
+          return { ok: false, error: "EML 公式输入无效" };
+        }
+      } else if (derivation.operation === "EML_COMPOSITION") {
+        if (
+          inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
+          !Array.isArray(derivation.inputNames) || derivation.inputNames.length !== inputValueIds.length ||
+          derivation.inputNames.some((name) => !isShortString(name, 100)) ||
+          !isShortString(derivation.functionDefinition, 1000)
+        ) return { ok: false, error: "组合函数内容无效" };
+      } else {
+        return { ok: false, error: "不支持的公式类型" };
       }
       if (!Expr.isValidExpression(derivation.rawExpression)) return { ok: false, error: "公式表达式无效" };
       if (!Array.isArray(derivation.rewriteSteps) || derivation.rewriteSteps.length > MAX_REWRITE_STEPS) {
@@ -1847,6 +2204,15 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const allowedSelection = (id) => id === null || Boolean(candidate.values[id]);
     if (!allowedSelection(candidate.inputXId) || !allowedSelection(candidate.inputYId) || !allowedSelection(candidate.selectedValueId)) {
       return { ok: false, error: "选择状态引用了不存在的数值" };
+    }
+
+    if (candidate.customFunction !== undefined) {
+      const custom = candidate.customFunction;
+      if (
+        !custom || !isShortString(custom.definitionText, 1000) ||
+        !Array.isArray(custom.inputValueIds) || custom.inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
+        custom.inputValueIds.some((valueId) => valueId !== null && !candidate.values[valueId])
+      ) return { ok: false, error: "组合函数状态无效" };
     }
 
     if (hasDependencyCycle(candidate)) return { ok: false, error: "公式来源存在循环引用" };
@@ -2157,8 +2523,20 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         step.directFormula = derivation.directFormula || "";
         step.rewriteSteps = Array.isArray(derivation.rewriteSteps) ? derivation.rewriteSteps : [];
         // 先访问输入：后序保证任何一步被记录时，它的输入都已在前
-        step.x = visit(derivation.xValueId);
-        step.y = visit(derivation.yValueId);
+        const inputIds = Array.isArray(derivation.inputValueIds)
+          ? derivation.inputValueIds
+          : [derivation.xValueId, derivation.yValueId];
+        const inputNames = Array.isArray(derivation.inputNames)
+          ? derivation.inputNames
+          : ["x", "y"];
+        step.inputs = inputIds.map((valueId, index) => ({
+          name: inputNames[index] || `参数 ${index + 1}`,
+          value: visit(valueId),
+        }));
+        if (derivation.operation === "EML" || !derivation.operation) {
+          step.x = step.inputs[0]?.value;
+          step.y = step.inputs[1]?.value;
+        }
       }
 
       inProgress.delete(currentId);
@@ -2208,6 +2586,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const Persistence = root.EMLPersistence;
   const TreeController = root.EMLTreeController;
   const Trace = root.EMLDerivationTrace;
+  const Composition = root.EMLComposition;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -2235,10 +2614,22 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     treeExpandMore: document.getElementById("treeExpandMore"),
+    customDefinition: document.getElementById("customDefinition"),
+    customApply: document.getElementById("customApplyButton"),
+    customDefinitionStatus: document.getElementById("customDefinitionStatus"),
+    customFormulaLine: document.getElementById("customFormulaLine"),
+    customFunctionName: document.getElementById("customFunctionName"),
+    customInputSlots: document.getElementById("customInputSlots"),
+    customResult: document.getElementById("customResultOutput"),
+    customAdd: document.getElementById("customAddButton"),
+    customDirectPreview: document.getElementById("customDirectPreview"),
   };
 
   let state = restoreState();
   let preview = null;
+  let customDefinition = null;
+  let customPreview = null;
+  let customDefinitionError = "";
   let pointerDrag = null;
   let suppressValueClick = false;
   let treeDepth = Store.DEFAULT_TREE_DEPTH;
@@ -2289,6 +2680,31 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const x = currentValue(state.inputXId);
     const y = currentValue(state.inputYId);
     preview = x && y ? Evaluator.evaluateEML(x.canonicalExpression, y.canonicalExpression) : null;
+    recomputeCustomPreview();
+  }
+
+  function recomputeCustomPreview() {
+    const custom = Store.getCustomFunction(state);
+    customDefinition = null;
+    customPreview = null;
+    customDefinitionError = "";
+    if (!custom.definitionText) return;
+    const parsed = Composition.parseDefinition(custom.definitionText);
+    if (!parsed.ok) {
+      customDefinitionError = parsed.error;
+      return;
+    }
+    customDefinition = parsed.definition;
+    if (custom.inputValueIds.length !== customDefinition.parameterNames.length) {
+      customDefinitionError = "函数输入状态无效，请重新应用函数。";
+      return;
+    }
+    const inputs = custom.inputValueIds.map(currentValue);
+    if (inputs.some((value) => !value)) return;
+    customPreview = Composition.evaluate(
+      customDefinition,
+      inputs.map((value) => value.canonicalExpression)
+    );
   }
 
   function renderSlot(element, value, placeholder) {
@@ -2326,6 +2742,63 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     elements.result.textContent = preview.displayText;
     elements.directPreview.textContent = preview.directFormula;
     elements.add.disabled = false;
+  }
+
+  function renderCustomCalculator() {
+    const custom = Store.getCustomFunction(state);
+    elements.customDefinition.value = custom.definitionText;
+    elements.customDefinitionStatus.textContent = customDefinitionError || (
+      customDefinition ? `已应用：${customDefinition.displayText}` : "只支持参数名与 EML(...) 的嵌套组合。"
+    );
+    elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
+    elements.customFormulaLine.hidden = !customDefinition;
+    elements.customInputSlots.replaceChildren();
+
+    if (!customDefinition) {
+      elements.customResult.textContent = "?";
+      elements.customResult.classList.remove("error");
+      elements.customAdd.disabled = true;
+      elements.customDirectPreview.textContent = customDefinitionError || "输入 EML 组合函数后开始计算。";
+      return;
+    }
+
+    elements.customFunctionName.textContent = `${customDefinition.name}(`;
+    customDefinition.parameterNames.forEach((name, index) => {
+      if (index > 0) {
+        const comma = document.createElement("span");
+        comma.className = "formula-punctuation";
+        comma.textContent = ",";
+        elements.customInputSlots.appendChild(comma);
+      }
+      const slot = document.createElement("button");
+      slot.type = "button";
+      slot.className = "input-slot";
+      slot.dataset.slot = `custom:${index}`;
+      slot.setAttribute("aria-label", `${name} 输入位置`);
+      renderSlot(slot, currentValue(custom.inputValueIds[index]), name);
+      bindSlot(slot, slot.dataset.slot);
+      elements.customInputSlots.appendChild(slot);
+    });
+
+    const invalid = Boolean(customPreview && (!customPreview.ok || customPreview.limitReached));
+    elements.customResult.classList.toggle("error", invalid);
+    if (!customPreview) {
+      elements.customResult.textContent = "?";
+      elements.customDirectPreview.textContent = "等待全部参数。";
+      elements.customAdd.disabled = true;
+      return;
+    }
+    if (!customPreview.ok) {
+      elements.customResult.textContent = "未定义";
+      elements.customDirectPreview.textContent = customPreview.error;
+      elements.customAdd.disabled = true;
+      return;
+    }
+    elements.customResult.textContent = customPreview.displayText;
+    elements.customDirectPreview.textContent = customPreview.limitReached
+      ? "化简达到安全上限，当前结果尚不能添加。"
+      : customPreview.directFormula;
+    elements.customAdd.disabled = Boolean(customPreview.limitReached);
   }
 
   function makeDeleteButton(valueId) {
@@ -2453,8 +2926,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
     const inputs = document.createElement("ul");
     inputs.className = "tree-inputs";
-    appendValueBranch(inputs, "x", derivation.x);
-    appendValueBranch(inputs, "y", derivation.y);
+    const branches = Array.isArray(derivation.inputs)
+      ? derivation.inputs
+      : [{ name: "x", node: derivation.x }, { name: "y", node: derivation.y }];
+    branches.forEach((input) => appendValueBranch(inputs, input.name, input.node));
     details.appendChild(inputs);
     return details;
   }
@@ -2500,7 +2975,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (step.kind === "derived") {
       const inputs = document.createElement("div");
       inputs.className = "trace-step-inputs";
-      inputs.textContent = `x = ${describeTraceRef(step.x)} · y = ${describeTraceRef(step.y)}`;
+      const refs = Array.isArray(step.inputs)
+        ? step.inputs
+        : [{ name: "x", value: step.x }, { name: "y", value: step.y }];
+      inputs.textContent = refs.map((input) => `${input.name} = ${describeTraceRef(input.value)}`).join(" · ");
       item.appendChild(inputs);
 
       if (step.rewriteSteps && step.rewriteSteps.length) {
@@ -2609,6 +3087,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   function render() {
     renderCalculator();
+    renderCustomCalculator();
     renderValues();
     renderDetails();
   }
@@ -2618,7 +3097,11 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       showNotice("拖入的数值无效。", true);
       return;
     }
-    state = Store.setInput(state, slotName, valueId);
+    if (slotName.startsWith("custom:")) {
+      state = Store.setCustomInput(state, Number(slotName.slice("custom:".length)), valueId);
+    } else {
+      state = Store.setInput(state, slotName, valueId);
+    }
     recomputePreview();
     persistState();
     showNotice("");
@@ -2650,6 +3133,22 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   bindSlot(elements.slotX, "x");
   bindSlot(elements.slotY, "y");
 
+  elements.customApply.addEventListener("click", () => {
+    const parsed = Composition.parseDefinition(elements.customDefinition.value);
+    if (!parsed.ok) {
+      customDefinitionError = parsed.error;
+      customDefinition = null;
+      customPreview = null;
+      renderCustomCalculator();
+      return;
+    }
+    state = Store.setCustomFunction(state, parsed.definition.displayText, parsed.definition.parameterNames.length);
+    recomputePreview();
+    persistState();
+    showNotice("已应用 EML 组合函数。", false);
+    render();
+  });
+
   elements.add.addEventListener("click", () => {
     if (!preview || !preview.ok || !state.inputXId || !state.inputYId) return;
     const result = Store.addEvaluation(state, preview, state.inputXId, state.inputYId);
@@ -2661,6 +3160,21 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       "duplicate-formula": "该数值和公式已经存在。",
     };
     showNotice(messages[result.status] || "无法添加当前结果。", result.status === "invalid");
+    render();
+  });
+
+  elements.customAdd.addEventListener("click", () => {
+    const custom = Store.getCustomFunction(state);
+    if (!customPreview || !customPreview.ok || customPreview.limitReached || custom.inputValueIds.some((id) => !id)) return;
+    const result = Store.addCompositionEvaluation(state, customPreview, custom.inputValueIds);
+    state = result.state;
+    persistState();
+    const messages = {
+      "added-value": "已添加组合函数结果和公式来源。",
+      "added-formula": "数值已存在，已添加新的组合函数来源。",
+      "duplicate-formula": "该组合函数公式已经存在。",
+    };
+    showNotice(messages[result.status] || "无法添加当前组合函数结果。", result.status === "invalid");
     render();
   });
 
