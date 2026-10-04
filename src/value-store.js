@@ -357,15 +357,18 @@
     const maxDepth = options?.maxDepth ?? Infinity;
     const maxNodes = options?.maxNodes ?? Infinity;
     const budget = { count: 0 };
+    const expandedValueIds = new Set();
 
     function buildNode(currentValueId, path, depth) {
       const value = state.values[currentValueId];
       if (!value) return { type: "missing", valueId: currentValueId };
       if (path.has(currentValueId)) return { type: "cycle", valueId: currentValueId, label: value.displayText };
+      if (expandedValueIds.has(currentValueId)) return { type: "reference", valueId: currentValueId, label: value.displayText };
       if (budget.count >= maxNodes) {
         return { type: "deferred", valueId: currentValueId, label: value.displayText, reason: "node-limit" };
       }
       budget.count += 1;
+      expandedValueIds.add(currentValueId);
       if (depth >= maxDepth && value.derivationIds.length > 0) {
         return { type: "deferred", valueId: currentValueId, label: value.displayText, reason: "depth-limit" };
       }
@@ -396,6 +399,9 @@
           const inputNames = Array.isArray(derivation.inputNames)
             ? derivation.inputNames
             : ["x", "y"];
+          const emlTree = derivation.emlTree
+            ? attachCompositionSources(derivation.emlTree, new Map(inputNames.map((name, index) => [name, inputIds[index]])))
+            : undefined;
           const inputs = inputIds.map((inputId, index) => ({
             name: inputNames[index] || `参数 ${index + 1}`,
             node: buildNode(inputId, nextPath, depth + 1),
@@ -404,9 +410,7 @@
             type: "derivation",
             derivationId: derivation.id,
             directFormula: derivation.expandedFormula || derivation.directFormula,
-            emlTree: derivation.emlTree
-              ? attachCompositionSources(derivation.emlTree, new Map(inputNames.map((name, index) => [name, inputIds[index]])))
-              : undefined,
+            emlTree,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };

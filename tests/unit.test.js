@@ -147,7 +147,7 @@ test("U14 完整计算树展开输入和化简步骤", () => {
   const added = add(initial(), evaluate(Expr.ONE, Expr.ONE));
   const tree = Store.getDetails(added.state, added.resultValueId).tree;
   assert.equal(tree.derivations[0].x.initial, true);
-  assert.equal(tree.derivations[0].y.initial, true);
+  assert.equal(tree.derivations[0].y.type, "reference");
   assert.ok(tree.derivations[0].rewriteSteps.some((step) => step.ruleId === "EXP_ONE"));
 });
 

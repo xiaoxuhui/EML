@@ -47,7 +47,7 @@
   let customDefinitionError = "";
   let pointerDrag = null;
   let suppressValueClick = false;
-  let treeDepth = Store.MAX_TREE_DEPTH;
+  let treeDepth = Infinity;
   const treeController = TreeController.create({
     viewport: elements.calculationTreeViewport,
     canvas: elements.calculationTree,
@@ -329,6 +329,8 @@
 
     if (node.type === "cycle") {
       item.append("（检测到循环，已停止展开）");
+    } else if (node.type === "reference") {
+      item.append("（已在前处展开）");
     } else if (node.type === "deferred") {
       item.append(node.reason === "node-limit" ? "（已达到节点显示上限）" : "（还有更早的来源）");
     } else if (node.derivations && node.derivations.length) {
@@ -347,6 +349,8 @@
       const source = node?.source;
       if (source?.type === "cycle") {
         value.append("（检测到循环，已停止展开）");
+      } else if (source?.type === "reference") {
+        value.append("（已在前处展开）");
       } else if (source?.type === "deferred") {
         value.append("（来源已折叠）");
       } else if (source?.initial) {
@@ -519,10 +523,10 @@
   function renderDetails() {
     const details = Store.getDetails(state, state.selectedValueId, {
       maxDepth: treeDepth,
-      maxNodes: Store.MAX_TREE_NODES,
+      maxNodes: Infinity,
     });
     if (treeController.ensureValue(state.selectedValueId)) {
-      treeDepth = Store.MAX_TREE_DEPTH;
+      treeDepth = Infinity;
       return renderDetails();
     }
     elements.detailsEmpty.hidden = Boolean(details);
