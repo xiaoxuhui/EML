@@ -283,7 +283,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .expanded-eml-heading { cursor: pointer; font-family: Cambria, "Times New Roman", serif; font-weight: 700; color: #173f45; }
 .expanded-eml-heading { list-style: none; }
 .expanded-eml-heading::-webkit-details-marker { display: none; }
-.expanded-eml-inputs { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 0 14px; }
+.expanded-eml-inputs { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 0 14px; padding-left: 12px; border-left: 2px solid #a9cdd1; }
 .expanded-eml-input { min-width: 0; color: #34434d; font-family: Cambria, "Times New Roman", serif; overflow-wrap: anywhere; }
 .expanded-eml-label { font-weight: 700; }
 .expanded-eml-value { overflow-wrap: anywhere; }

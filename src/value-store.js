@@ -372,20 +372,15 @@
     const maxDepth = options?.maxDepth ?? Infinity;
     const maxNodes = options?.maxNodes ?? Infinity;
     const budget = { count: 0 };
-    const expandedValueIds = new Set();
 
     function buildNode(currentValueId, path, depth) {
       const value = state.values[currentValueId];
       if (!value) return { type: "missing", valueId: currentValueId };
       if (path.has(currentValueId)) return { type: "cycle", valueId: currentValueId, label: value.displayText };
-      if (expandedValueIds.has(currentValueId)) {
-        return { type: "reference", valueId: currentValueId, label: value.displayText, initial: currentValueId === initialValueId };
-      }
       if (budget.count >= maxNodes) {
         return { type: "deferred", valueId: currentValueId, label: value.displayText, reason: "node-limit" };
       }
       budget.count += 1;
-      expandedValueIds.add(currentValueId);
       if (depth >= maxDepth && value.derivationIds.length > 0) {
         return { type: "deferred", valueId: currentValueId, label: value.displayText, reason: "depth-limit" };
       }

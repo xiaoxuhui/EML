@@ -38,9 +38,10 @@ test("不传限制时保持完整计算树兼容行为", () => {
   assert.equal(Store.treeHasDeferredBranches(tree), false);
 });
 
-test("重复引用的数值只展开一次，后续显示引用节点", () => {
+test("重复引用的数值在每个分支都完整展开", () => {
   const { state, valueId } = addChain(3);
   const tree = Store.buildValueTree(state, valueId);
   const serialized = JSON.stringify(tree);
-  assert.ok(serialized.includes('"type":"reference"'));
+  assert.equal(serialized.includes('"type":"reference"'), false);
+  assert.ok(serialized.split('"initial":true').length > 2);
 });
