@@ -39,6 +39,8 @@ test("页面将动态槽位接入组合求值与原有添加机制", () => {
   assert.match(app, /Store\.deleteCustomFunction/);
   assert.match(app, /Store\.updateCustomFunction/);
   assert.match(app, /startEditCustomFunction/);
+  assert.match(app, /contextmenu/);
+  assert.match(app, /请先右键删除该函数中的全部输入/);
   assert.match(app, /Store\.addCompositionEvaluation/);
   assert.match(app, /bindSlot\(slot, slot\.dataset\.slot\)/);
   assert.match(app, /undoLastChange/);

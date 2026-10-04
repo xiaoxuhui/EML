@@ -189,11 +189,17 @@
     if (!node) return definitionSlot(path);
     if (node.type === "parameter" || node.type === "constant") {
       const value = document.createElement("span");
+      value.className = "definition-leaf";
+      value.dataset.definitionPath = path;
       value.textContent = node.type === "parameter" ? node.name : node.displayText;
+      value.title = "右键删除此输入";
+      bindDefinitionNode(value, path, () => true);
       return value;
     }
     const call = document.createElement("span");
     call.className = "definition-call";
+    call.dataset.definitionPath = path;
+    call.title = "全部输入清空后，可右键删除此函数";
     call.append(`${node.type === "eml" ? "EML" : node.name}(`);
     const children = node.type === "eml" ? [node.left, node.right] : node.arguments;
     children.forEach((child, index) => {
@@ -201,6 +207,7 @@
       call.appendChild(renderDefinitionNode(child, `${path}.${node.type === "eml" ? (index === 0 ? "left" : "right") : `arguments.${index}`}`));
     });
     call.append(")");
+    bindDefinitionNode(call, path, () => children.every((child) => !child));
     return call;
   }
 
@@ -269,6 +276,19 @@
         definitionDraft.selectedPath = path;
         renderDefinitionBuilder();
       }
+    });
+  }
+
+  function bindDefinitionNode(element, path, canDelete) {
+    element.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!canDelete()) {
+        showNotice("请先右键删除该函数中的全部输入。", true);
+        return;
+      }
+      placeDefinitionNode(path, null);
+      showNotice("已删除表达式节点。", false);
     });
   }
 
