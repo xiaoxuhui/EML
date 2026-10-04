@@ -419,7 +419,7 @@
     return {
       value,
       directFormulas: visibleDerivations(state, valueId)
-        .map((derivation) => derivation.directFormula),
+        .map((derivation) => derivation.expandedFormula || derivation.directFormula),
       tree: buildValueTree(state, valueId, treeOptions),
     };
   }

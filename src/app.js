@@ -218,7 +218,7 @@
       panel.appendChild(line);
       const direct = document.createElement("div");
       direct.className = "direct-preview";
-      direct.textContent = !evaluation ? "等待全部参数。" : !evaluation.ok ? evaluation.error : evaluation.limitReached ? "化简达到安全上限，当前结果尚不能添加。" : evaluation.directFormula;
+      direct.textContent = !evaluation ? "等待全部参数。" : !evaluation.ok ? evaluation.error : evaluation.limitReached ? "化简达到安全上限，当前结果尚不能添加。" : (evaluation.expandedFormula || evaluation.directFormula);
       panel.appendChild(direct);
       const remove = document.createElement("button");
       remove.type = "button";

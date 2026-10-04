@@ -241,7 +241,8 @@
       resultExpression: calculated.expression,
       canonicalKey: Expr.canonicalKey(calculated.expression),
       displayText,
-      directFormula: `${callText} = ${displayText}`,
+      // 函数名只属于调用控件；保存与展开的计算过程统一从实际 EML 式开始。
+      directFormula: expandedFormula,
       expandedFormula,
       rewriteSteps: [
         ...(expandedBody === callText ? [] : [{ ruleId: "FUNCTION_EXPANSION", before: callText, after: expandedBody }]),

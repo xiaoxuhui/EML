@@ -27,7 +27,7 @@ test("UCF05 嵌套 EML 使用多个输入得到符号结果", () => {
   const result = Composition.evaluate(parsed.definition, [Expr.ONE, Expr.ONE, Expr.ONE]);
   assert.equal(result.ok, true);
   assert.equal(result.displayText, "e^(e)");
-  assert.equal(result.directFormula, "F(1, 1, 1) = e^(e)");
+  assert.equal(result.directFormula, "EML(EML(1, 1), 1) = e^(e)");
   assert.equal(result.expandedFormula, "EML(EML(1, 1), 1) = e^(e)");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_ONE"));
 });
@@ -53,6 +53,7 @@ test("UCF06-UCF08 组合函数结果加入数值栏并保护全部输入", () =>
   assert.deepEqual(derivation.inputValueIds, [Store.initialValueId, Store.initialValueId, Store.initialValueId]);
   assert.equal(Store.isReferenced(added.state, Store.initialValueId), true);
   const tree = Store.getDetails(added.state, added.resultValueId).tree;
+  assert.deepEqual(Store.getDetails(added.state, added.resultValueId).directFormulas, ["EML(EML(1, 1), 1) = e^(e)"]);
   assert.equal(tree.derivations[0].inputs.length, 3);
   assert.deepEqual(tree.derivations[0].inputs.map((input) => input.name), ["x", "y", "z"]);
 });
@@ -93,7 +94,7 @@ test("MF09 已定义函数可被新函数调用并展开求值", () => {
   const result = Composition.evaluate(g, [Expr.ONE], [f, g]);
   assert.equal(result.ok, true);
   assert.equal(result.displayText, "e");
-  assert.equal(result.directFormula, "g(1) = e");
+  assert.equal(result.directFormula, "EML(1, 1) = e");
   assert.equal(result.expandedFormula, "EML(1, 1) = e");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "FUNCTION_EXPANSION"));
 });
