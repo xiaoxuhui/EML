@@ -30,6 +30,7 @@ test("UCF05 嵌套 EML 使用多个输入得到符号结果", () => {
   assert.equal(result.directFormula, "EML(EML(1, 1), 1) = e^(e)");
   assert.equal(result.expandedFormula, "EML(EML(1, 1), 1) = e^(e)");
   assert.equal(result.emlTree.type, "eml");
+  assert.equal(result.emlTree.result, "e^(e)");
   assert.equal(result.emlTree.inputs[0].type, "eml");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_ONE"));
 });

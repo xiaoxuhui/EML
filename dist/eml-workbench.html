@@ -1785,7 +1785,11 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         rawExpression: result.rawExpression,
         rewriteSteps: [...left.rewriteSteps, ...right.rewriteSteps, ...result.rewriteSteps],
         limitReached: left.limitReached || right.limitReached || result.limitReached,
-        emlTree: { type: "eml", inputs: [left.emlTree, right.emlTree] },
+        emlTree: {
+          type: "eml",
+          result: Expr.render(result.resultExpression),
+          inputs: [left.emlTree, right.emlTree],
+        },
       };
     }
 
@@ -3216,9 +3220,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const element = document.createElement("details");
     element.className = "expanded-eml-node";
     element.open = Boolean(expanded);
+    const argumentText = (argument) => argument?.type === "eml"
+      ? argument.result || "EML"
+      : argument?.label || "未知";
     const heading = document.createElement("summary");
     heading.className = "expanded-eml-heading";
-    heading.textContent = "EML";
+    heading.textContent = `EML(${argumentText(node.inputs?.[0])}, ${argumentText(node.inputs?.[1])}) = ${node.result || "?"}`;
     element.appendChild(heading);
     const inputs = document.createElement("div");
     inputs.className = "expanded-eml-inputs";

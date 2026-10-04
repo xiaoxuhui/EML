@@ -363,9 +363,12 @@
     const element = document.createElement("details");
     element.className = "expanded-eml-node";
     element.open = Boolean(expanded);
+    const argumentText = (argument) => argument?.type === "eml"
+      ? argument.result || "EML"
+      : argument?.label || "未知";
     const heading = document.createElement("summary");
     heading.className = "expanded-eml-heading";
-    heading.textContent = "EML";
+    heading.textContent = `EML(${argumentText(node.inputs?.[0])}, ${argumentText(node.inputs?.[1])}) = ${node.result || "?"}`;
     element.appendChild(heading);
     const inputs = document.createElement("div");
     inputs.className = "expanded-eml-inputs";

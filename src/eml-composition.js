@@ -222,7 +222,11 @@
         rawExpression: result.rawExpression,
         rewriteSteps: [...left.rewriteSteps, ...right.rewriteSteps, ...result.rewriteSteps],
         limitReached: left.limitReached || right.limitReached || result.limitReached,
-        emlTree: { type: "eml", inputs: [left.emlTree, right.emlTree] },
+        emlTree: {
+          type: "eml",
+          result: Expr.render(result.resultExpression),
+          inputs: [left.emlTree, right.emlTree],
+        },
       };
     }
 
