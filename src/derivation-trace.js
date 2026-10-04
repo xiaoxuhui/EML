@@ -1,9 +1,12 @@
 (function (root, factory) {
   "use strict";
-  const api = factory();
+  const valueStore = typeof module === "object" && module.exports
+    ? require("./value-store.js")
+    : root.EMLValueStore;
+  const api = factory(valueStore);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.EMLDerivationTrace = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (ValueStore) {
   "use strict";
 
   /**
@@ -46,8 +49,7 @@
       }
 
       inProgress.add(currentId);
-      const derivationId = value.derivationIds[0];
-      const derivation = derivationId ? state.derivations[derivationId] : null;
+      const derivation = ValueStore.visibleDerivations(state, currentId)[0] || null;
 
       const step = {
         valueId: currentId,
@@ -97,7 +99,7 @@
     for (const step of steps) step.isTarget = step.valueId === valueId;
 
     const targetValue = state.values[valueId];
-    const extraSourceCount = targetValue ? Math.max(0, targetValue.derivationIds.length - 1) : 0;
+    const extraSourceCount = targetValue ? Math.max(0, ValueStore.visibleDerivations(state, valueId).length - 1) : 0;
 
     return {
       ok: !truncated,

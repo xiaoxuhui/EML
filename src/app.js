@@ -592,6 +592,7 @@
       "added-value": "已添加新数值和公式来源。",
       "added-formula": "数值已存在，已添加新的公式来源。",
       "duplicate-formula": "该数值和公式已经存在。",
+      "cyclic-formula": "结果已存在，循环计算来源未保存；保留首次无环来源。",
     };
     showNotice(messages[result.status] || "无法添加当前结果。", result.status === "invalid");
     render();
@@ -606,6 +607,7 @@
       "added-value": "已添加组合函数结果和公式来源。",
       "added-formula": "数值已存在，已添加新的组合函数来源。",
       "duplicate-formula": "该组合函数公式已经存在。",
+      "cyclic-formula": "结果已存在，循环计算来源未保存；保留首次无环来源。",
     };
     showNotice(messages[result.status] || "无法添加当前组合函数结果。", result.status === "invalid");
     render();

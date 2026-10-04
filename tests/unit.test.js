@@ -211,6 +211,35 @@ test("结果等于自身的公式不阻止删除数值", () => {
   assert.equal(Store.deleteValue(state, zeroId).status, "deleted");
 });
 
+test("重复计算已知结果时不保存循环公式来源", () => {
+  const state = initial();
+  const zeroId = Store.valueIdFor(Expr.canonicalKey(Expr.ZERO));
+  state.values[zeroId] = {
+    id: zeroId,
+    canonicalExpression: Expr.ZERO,
+    canonicalKey: Expr.canonicalKey(Expr.ZERO),
+    displayText: "0",
+    protected: false,
+    derivationIds: [],
+    createdAt: new Date().toISOString(),
+  };
+  state.valueOrder.push(zeroId);
+  const evaluation = {
+    ok: true,
+    canonicalKey: Expr.canonicalKey(Expr.ZERO),
+    resultExpression: Expr.ZERO,
+    xExpression: Expr.ZERO,
+    yExpression: Expr.ZERO,
+    displayText: "0",
+    rawExpression: Expr.ZERO,
+    directFormula: "EML(0, 0) = 0",
+    rewriteSteps: [],
+  };
+  const added = Store.addEvaluation(state, evaluation, zeroId, zeroId);
+  assert.equal(added.status, "cyclic-formula");
+  assert.equal(added.state.values[zeroId].derivationIds.length, 0);
+});
+
 test("双循环数值可通过级联删除一起移除", () => {
   const state = initial();
   const aId = Store.valueIdFor("cycle-a");

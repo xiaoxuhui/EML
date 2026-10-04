@@ -75,6 +75,40 @@
     return derivation ? [derivation.xValueId, derivation.yValueId] : [];
   }
 
+  function dependsOnValue(state, startValueId, targetValueId, maximumDerivationIndex = Infinity, seen = new Set()) {
+    if (startValueId === targetValueId) return true;
+    if (seen.has(startValueId)) return false;
+    seen.add(startValueId);
+    const value = state.values[startValueId];
+    if (!value) return false;
+    const derivationIds = Object.keys(state.derivations);
+    return value.derivationIds.some((derivationId) => {
+      const index = derivationIds.indexOf(derivationId);
+      const derivation = state.derivations[derivationId];
+      return derivation && index < maximumDerivationIndex && derivationInputIds(derivation)
+        .some((inputValueId) => dependsOnValue(state, inputValueId, targetValueId, maximumDerivationIndex, new Set(seen)));
+    });
+  }
+
+  function wouldIntroduceCycle(state, resultValueId, inputValueIds) {
+    return inputValueIds.some((inputValueId) => dependsOnValue(state, inputValueId, resultValueId));
+  }
+
+  function isCyclicDerivation(state, derivation) {
+    const index = Object.keys(state.derivations).indexOf(derivation.id);
+    return derivationInputIds(derivation).some((inputValueId) => (
+      inputValueId === derivation.resultValueId || dependsOnValue(state, inputValueId, derivation.resultValueId, index)
+    ));
+  }
+
+  function visibleDerivations(state, valueId) {
+    const value = state.values[valueId];
+    if (!value) return [];
+    return value.derivationIds
+      .map((id) => state.derivations[id])
+      .filter((derivation) => derivation && !isCyclicDerivation(state, derivation));
+  }
+
   function addEvaluation(state, evaluation, xValueId, yValueId) {
     if (!evaluation || !evaluation.ok) return { state, status: "invalid" };
     if (!state.values[xValueId] || !state.values[yValueId]) return { state, status: "missing-input" };
@@ -85,6 +119,10 @@
     const derivationId = derivationIdFor(formulaKey);
     const existingValue = next.values[resultValueId];
     const existingDerivation = next.derivations[derivationId];
+
+    if (existingValue && !existingDerivation && wouldIntroduceCycle(state, resultValueId, [xValueId, yValueId])) {
+      return { state, resultValueId, status: "cyclic-formula" };
+    }
 
     if (!existingValue) {
       next.values[resultValueId] = {
@@ -147,6 +185,10 @@
     const derivationId = derivationIdFor(formulaKey);
     const existingValue = next.values[resultValueId];
     const existingDerivation = next.derivations[derivationId];
+
+    if (existingValue && !existingDerivation && wouldIntroduceCycle(state, resultValueId, inputValueIds)) {
+      return { state, resultValueId, status: "cyclic-formula" };
+    }
 
     if (!existingValue) {
       next.values[resultValueId] = {
@@ -333,9 +375,7 @@
         valueId: currentValueId,
         label: value.displayText,
         initial: value.protected && value.derivationIds.length === 0,
-        derivations: value.derivationIds.map((derivationId) => {
-          const derivation = state.derivations[derivationId];
-          if (!derivation) return { type: "missing-derivation", derivationId };
+        derivations: visibleDerivations(state, currentValueId).map((derivation) => {
           const inputIds = derivationInputIds(derivation);
           const inputNames = Array.isArray(derivation.inputNames)
             ? derivation.inputNames
@@ -346,7 +386,7 @@
           }));
           const treeDerivation = {
             type: "derivation",
-            derivationId,
+            derivationId: derivation.id,
             directFormula: derivation.directFormula,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
@@ -377,9 +417,7 @@
     if (!value) return null;
     return {
       value,
-      directFormulas: value.derivationIds
-        .map((id) => state.derivations[id])
-        .filter(Boolean)
+      directFormulas: visibleDerivations(state, valueId)
         .map((derivation) => derivation.directFormula),
       tree: buildValueTree(state, valueId, treeOptions),
     };
@@ -396,6 +434,7 @@
     formulaKeyFor,
     compositionFormulaKeyFor,
     derivationInputIds,
+    visibleDerivations,
     createInitialState,
     addEvaluation,
     addCompositionEvaluation,

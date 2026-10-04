@@ -1876,6 +1876,40 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return derivation ? [derivation.xValueId, derivation.yValueId] : [];
   }
 
+  function dependsOnValue(state, startValueId, targetValueId, maximumDerivationIndex = Infinity, seen = new Set()) {
+    if (startValueId === targetValueId) return true;
+    if (seen.has(startValueId)) return false;
+    seen.add(startValueId);
+    const value = state.values[startValueId];
+    if (!value) return false;
+    const derivationIds = Object.keys(state.derivations);
+    return value.derivationIds.some((derivationId) => {
+      const index = derivationIds.indexOf(derivationId);
+      const derivation = state.derivations[derivationId];
+      return derivation && index < maximumDerivationIndex && derivationInputIds(derivation)
+        .some((inputValueId) => dependsOnValue(state, inputValueId, targetValueId, maximumDerivationIndex, new Set(seen)));
+    });
+  }
+
+  function wouldIntroduceCycle(state, resultValueId, inputValueIds) {
+    return inputValueIds.some((inputValueId) => dependsOnValue(state, inputValueId, resultValueId));
+  }
+
+  function isCyclicDerivation(state, derivation) {
+    const index = Object.keys(state.derivations).indexOf(derivation.id);
+    return derivationInputIds(derivation).some((inputValueId) => (
+      inputValueId === derivation.resultValueId || dependsOnValue(state, inputValueId, derivation.resultValueId, index)
+    ));
+  }
+
+  function visibleDerivations(state, valueId) {
+    const value = state.values[valueId];
+    if (!value) return [];
+    return value.derivationIds
+      .map((id) => state.derivations[id])
+      .filter((derivation) => derivation && !isCyclicDerivation(state, derivation));
+  }
+
   function addEvaluation(state, evaluation, xValueId, yValueId) {
     if (!evaluation || !evaluation.ok) return { state, status: "invalid" };
     if (!state.values[xValueId] || !state.values[yValueId]) return { state, status: "missing-input" };
@@ -1886,6 +1920,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const derivationId = derivationIdFor(formulaKey);
     const existingValue = next.values[resultValueId];
     const existingDerivation = next.derivations[derivationId];
+
+    if (existingValue && !existingDerivation && wouldIntroduceCycle(state, resultValueId, [xValueId, yValueId])) {
+      return { state, resultValueId, status: "cyclic-formula" };
+    }
 
     if (!existingValue) {
       next.values[resultValueId] = {
@@ -1948,6 +1986,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const derivationId = derivationIdFor(formulaKey);
     const existingValue = next.values[resultValueId];
     const existingDerivation = next.derivations[derivationId];
+
+    if (existingValue && !existingDerivation && wouldIntroduceCycle(state, resultValueId, inputValueIds)) {
+      return { state, resultValueId, status: "cyclic-formula" };
+    }
 
     if (!existingValue) {
       next.values[resultValueId] = {
@@ -2134,9 +2176,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         valueId: currentValueId,
         label: value.displayText,
         initial: value.protected && value.derivationIds.length === 0,
-        derivations: value.derivationIds.map((derivationId) => {
-          const derivation = state.derivations[derivationId];
-          if (!derivation) return { type: "missing-derivation", derivationId };
+        derivations: visibleDerivations(state, currentValueId).map((derivation) => {
           const inputIds = derivationInputIds(derivation);
           const inputNames = Array.isArray(derivation.inputNames)
             ? derivation.inputNames
@@ -2147,7 +2187,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           }));
           const treeDerivation = {
             type: "derivation",
-            derivationId,
+            derivationId: derivation.id,
             directFormula: derivation.directFormula,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
@@ -2178,9 +2218,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (!value) return null;
     return {
       value,
-      directFormulas: value.derivationIds
-        .map((id) => state.derivations[id])
-        .filter(Boolean)
+      directFormulas: visibleDerivations(state, valueId)
         .map((derivation) => derivation.directFormula),
       tree: buildValueTree(state, valueId, treeOptions),
     };
@@ -2197,6 +2235,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     formulaKeyFor,
     compositionFormulaKeyFor,
     derivationInputIds,
+    visibleDerivations,
     createInitialState,
     addEvaluation,
     addCompositionEvaluation,
@@ -2607,10 +2646,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 /* derivation-trace.js */
 (function (root, factory) {
   "use strict";
-  const api = factory();
+  const valueStore = typeof module === "object" && module.exports
+    ? require("./value-store.js")
+    : root.EMLValueStore;
+  const api = factory(valueStore);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.EMLDerivationTrace = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (ValueStore) {
   "use strict";
 
   /**
@@ -2653,8 +2695,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       }
 
       inProgress.add(currentId);
-      const derivationId = value.derivationIds[0];
-      const derivation = derivationId ? state.derivations[derivationId] : null;
+      const derivation = ValueStore.visibleDerivations(state, currentId)[0] || null;
 
       const step = {
         valueId: currentId,
@@ -2704,7 +2745,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     for (const step of steps) step.isTarget = step.valueId === valueId;
 
     const targetValue = state.values[valueId];
-    const extraSourceCount = targetValue ? Math.max(0, targetValue.derivationIds.length - 1) : 0;
+    const extraSourceCount = targetValue ? Math.max(0, ValueStore.visibleDerivations(state, valueId).length - 1) : 0;
 
     return {
       ok: !truncated,
@@ -3315,6 +3356,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       "added-value": "已添加新数值和公式来源。",
       "added-formula": "数值已存在，已添加新的公式来源。",
       "duplicate-formula": "该数值和公式已经存在。",
+      "cyclic-formula": "结果已存在，循环计算来源未保存；保留首次无环来源。",
     };
     showNotice(messages[result.status] || "无法添加当前结果。", result.status === "invalid");
     render();
@@ -3329,6 +3371,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       "added-value": "已添加组合函数结果和公式来源。",
       "added-formula": "数值已存在，已添加新的组合函数来源。",
       "duplicate-formula": "该组合函数公式已经存在。",
+      "cyclic-formula": "结果已存在，循环计算来源未保存；保留首次无环来源。",
     };
     showNotice(messages[result.status] || "无法添加当前组合函数结果。", result.status === "invalid");
     render();
