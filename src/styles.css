@@ -172,6 +172,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .definition-source-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .definition-source { min-height: 32px; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: #f7f9fa; color: #24313b; font-family: Cambria, "Times New Roman", serif; cursor: grab; }
 .definition-source:active { cursor: grabbing; }
+.definition-source.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
 .definition-slot { display: inline-flex; min-width: 42px; min-height: 30px; padding: 3px 7px; border: 1px dashed #7daab0; border-radius: 4px; background: #f4fbfc; color: #5e7b80; font-family: inherit; vertical-align: middle; cursor: pointer; }
 .definition-slot.selected, .definition-slot.drag-over { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
 .definition-call { display: inline; white-space: nowrap; }

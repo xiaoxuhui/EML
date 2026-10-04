@@ -43,6 +43,7 @@
     definitionParameterSources: document.getElementById("definitionParameterSources"),
     definitionValueSources: document.getElementById("definitionValueSources"),
     customApply: document.getElementById("customApplyButton"),
+    customCancelEdit: document.getElementById("customCancelEditButton"),
     customDefinitionStatus: document.getElementById("customDefinitionStatus"),
   };
 
@@ -51,7 +52,8 @@
   const undoHistory = [];
   const MAX_UNDO_HISTORY = 100;
   let customDefinitionError = "";
-  let definitionDraft = { body: null, selectedPath: "root" };
+  let definitionDraft = { body: null, selectedPath: "root", pendingSource: null };
+  let editingFunctionId = null;
   let pointerDrag = null;
   let suppressValueClick = false;
   let treeDepth = Infinity;
@@ -235,12 +237,17 @@
       event.dataTransfer.setData("application/x-eml-definition-source", JSON.stringify({ kind, payload }));
       event.dataTransfer.effectAllowed = "copy";
     });
-    source.addEventListener("click", () => applyDefinitionSource({ kind, payload }));
+    source.classList.toggle("selected", definitionDraft.pendingSource?.kind === kind && JSON.stringify(definitionDraft.pendingSource.payload) === JSON.stringify(payload));
+    source.addEventListener("click", () => {
+      definitionDraft.pendingSource = { kind, payload };
+      renderDefinitionBuilder();
+    });
     return source;
   }
 
   function applyDefinitionSource(source, path = definitionDraft.selectedPath) {
     if (!path) return;
+    definitionDraft.pendingSource = null;
     if (source.kind === "function") placeDefinitionNode(path, functionNode(source.payload.name, source.payload.inputCount));
     if (source.kind === "parameter") placeDefinitionNode(path, { type: "parameter", name: source.payload.name });
     if (source.kind === "value") placeDefinitionNode(path, { type: "constant", expression: source.payload.expression, displayText: source.payload.displayText });
@@ -256,12 +263,23 @@
       if (!raw) return;
       try { applyDefinitionSource(JSON.parse(raw), path); } catch { showNotice("拖入内容无效。", true); }
     });
-    slot.addEventListener("click", () => { definitionDraft.selectedPath = path; renderDefinitionBuilder(); });
+    slot.addEventListener("click", () => {
+      if (definitionDraft.pendingSource) applyDefinitionSource(definitionDraft.pendingSource, path);
+      else {
+        definitionDraft.selectedPath = path;
+        renderDefinitionBuilder();
+      }
+    });
   }
 
   function renderDefinitionBuilder() {
     const name = elements.customDefinitionName.value.trim() || "f";
     const parameters = draftParameters();
+    const editing = Boolean(editingFunctionId);
+    elements.customDefinitionName.readOnly = editing;
+    elements.customDefinitionParameters.readOnly = editing;
+    elements.customApply.textContent = editing ? "保存修改" : "保存定义";
+    elements.customCancelEdit.hidden = !editing;
     elements.customDefinitionSignature.textContent = `${name}(${parameters.join(", ") || "…"})`;
     elements.customDefinitionExpression.replaceChildren(renderDefinitionNode(definitionDraft.body, "root"));
     elements.definitionFunctionSources.replaceChildren(definitionSource("function", "EML", { name: "EML", inputCount: 2 }));
@@ -345,9 +363,17 @@
       remove.textContent = "删除函数";
       remove.addEventListener("click", () => deleteCustomFunction(custom.id));
       panel.appendChild(remove);
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "delete-function-button";
+      edit.textContent = "编辑函数";
+      edit.addEventListener("click", () => startEditCustomFunction(custom));
+      panel.appendChild(edit);
       elements.customFunctionApplications.appendChild(panel);
     }
-    elements.customDefinitionStatus.textContent = customDefinitionError || "拖入函数、变量或数值构造表达式；数值会作为固定表达式保存。";
+    elements.customDefinitionStatus.textContent = customDefinitionError || (editingFunctionId
+      ? "正在编辑函数表达式。函数名和变量固定；把函数、变量或数值拖入空槽即可修改。"
+      : "拖入函数、变量或数值构造表达式；数值会作为固定表达式保存。点击来源后，再点击目标槽也可填入。");
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
   }
 
@@ -766,14 +792,11 @@
       render();
       return;
     }
-    const result = Store.addCustomFunction(
-      state,
-      parsed.definition.name,
-      parsed.definition.displayText,
-      parsed.definition.parameterNames.length,
-      { parameterNames: parsed.definition.parameterNames, body: parsed.definition.body }
-    );
-    if (result.status !== "added") {
+    const definitionAst = { parameterNames: parsed.definition.parameterNames, body: parsed.definition.body };
+    const result = editingFunctionId
+      ? Store.updateCustomFunction(state, editingFunctionId, parsed.definition.displayText, definitionAst)
+      : Store.addCustomFunction(state, parsed.definition.name, parsed.definition.displayText, parsed.definition.parameterNames.length, definitionAst);
+    if (!["added", "updated"].includes(result.status)) {
       customDefinitionError = result.status === "duplicate-name" ? "同名函数已存在，请使用其他函数名。" : "函数定义无效。";
       render();
       return;
@@ -782,8 +805,9 @@
     customDefinitionError = "";
     elements.customDefinitionName.value = "";
     elements.customDefinitionParameters.value = "";
-    definitionDraft = { body: null, selectedPath: "root" };
-    showNotice(`已添加函数 ${parsed.definition.name}。`, false);
+    definitionDraft = { body: null, selectedPath: "root", pendingSource: null };
+    editingFunctionId = null;
+    showNotice(result.status === "updated" ? `已更新函数 ${parsed.definition.name}。` : `已添加函数 ${parsed.definition.name}。`, false);
     render();
   });
 
@@ -820,6 +844,21 @@
     if (result.status !== "deleted") return;
     commitState(result.state);
     showNotice("已删除函数定义；已保存的数值和公式来源保持不变。", false);
+    render();
+  }
+
+  function startEditCustomFunction(custom) {
+    const parsed = definitionForCustom(custom);
+    if (!parsed.ok) {
+      showNotice("该函数定义无法载入编辑器。", true);
+      return;
+    }
+    editingFunctionId = custom.id;
+    elements.customDefinitionName.value = parsed.definition.name;
+    elements.customDefinitionParameters.value = parsed.definition.parameterNames.join(", ");
+    definitionDraft = { body: JSON.parse(JSON.stringify(parsed.definition.body)), selectedPath: "root", pendingSource: null };
+    customDefinitionError = "";
+    showNotice(`正在编辑函数 ${parsed.definition.name}。`, false);
     render();
   }
 
@@ -879,6 +918,16 @@
       customDefinitionError = "";
       renderDefinitionBuilder();
     });
+  });
+
+  elements.customCancelEdit.addEventListener("click", () => {
+    editingFunctionId = null;
+    definitionDraft = { body: null, selectedPath: "root", pendingSource: null };
+    elements.customDefinitionName.value = "";
+    elements.customDefinitionParameters.value = "";
+    customDefinitionError = "";
+    showNotice("已取消编辑函数。", false);
+    render();
   });
 
   recomputePreview();

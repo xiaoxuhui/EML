@@ -340,6 +340,21 @@
     return { state: next, status: "deleted" };
   }
 
+  function updateCustomFunction(state, functionId, definitionText, definitionAst) {
+    const functions = getCustomFunctions(state);
+    const current = functions.find((item) => item.id === functionId);
+    if (!current || typeof definitionText !== "string" || !definitionAst) return { state, status: "invalid" };
+    if (definitionAst.parameterNames.length !== current.inputValueIds.length) return { state, status: "input-count-changed" };
+    const next = cloneState(state);
+    next.customFunctions = functions.map((item) => item.id === functionId ? {
+      ...item,
+      definitionText,
+      definitionAst,
+    } : item);
+    delete next.customFunction;
+    return { state: next, status: "updated" };
+  }
+
   function setCustomInput(state, functionId, inputIndex, valueId) {
     const functions = getCustomFunctions(state);
     const custom = functions.find((item) => item.id === functionId);
@@ -470,6 +485,7 @@
     getCustomFunctions,
     addCustomFunction,
     deleteCustomFunction,
+    updateCustomFunction,
     setCustomInput,
     isReferenced,
     buildValueTree,

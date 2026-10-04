@@ -22,6 +22,7 @@ test("EML 与用户函数共享函数应用区，定义区只负责保存定义"
     "definitionParameterSources",
     "definitionValueSources",
     "customApplyButton",
+    "customCancelEditButton",
     "customFunctionApplications",
   ]) {
     assert.match(template, new RegExp(`id="${id}"`));
@@ -36,6 +37,8 @@ test("页面将动态槽位接入组合求值与原有添加机制", () => {
   assert.match(app, /Store\.addCustomFunction/);
   assert.match(app, /Store\.setCustomInput/);
   assert.match(app, /Store\.deleteCustomFunction/);
+  assert.match(app, /Store\.updateCustomFunction/);
+  assert.match(app, /startEditCustomFunction/);
   assert.match(app, /Store\.addCompositionEvaluation/);
   assert.match(app, /bindSlot\(slot, slot\.dataset\.slot\)/);
   assert.match(app, /undoLastChange/);

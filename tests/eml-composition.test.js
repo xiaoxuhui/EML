@@ -112,6 +112,23 @@ test("MF03-MF06 支持多个函数、独立输入和删除定义", () => {
   assert.deepEqual(Store.getCustomFunctions(state).map((item) => item.name), ["g"]);
 });
 
+test("VF08 编辑函数保留调用输入并更新表达式", () => {
+  let state = Store.createInitialState();
+  const original = Composition.parseDefinition("f(x) = EML(x, 1)").definition;
+  state = Store.addCustomFunction(state, original.name, original.displayText, 1, {
+    parameterNames: original.parameterNames, body: original.body,
+  }).state;
+  const custom = Store.getCustomFunctions(state)[0];
+  state = Store.setCustomInput(state, custom.id, 0, Store.initialValueId);
+  const changed = Composition.parseDefinition("f(x) = EML(1, x)").definition;
+  state = Store.updateCustomFunction(state, custom.id, changed.displayText, {
+    parameterNames: changed.parameterNames, body: changed.body,
+  }).state;
+  const updated = Store.getCustomFunctions(state)[0];
+  assert.equal(updated.inputValueIds[0], Store.initialValueId);
+  assert.equal(updated.definitionText, "f(x) = EML(1, x)");
+});
+
 test("MF09 已定义函数可被新函数调用并展开求值", () => {
   const f = Composition.parseDefinition("f(x) = EML(x, 1)").definition;
   const g = Composition.parseDefinition("g(x) = f(x)").definition;
