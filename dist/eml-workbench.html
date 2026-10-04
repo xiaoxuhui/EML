@@ -158,11 +158,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
 .function-application-empty { min-height: 64px; display: flex; align-items: center; color: var(--muted); }
 .custom-calculator { margin-top: 0; }
-.custom-definition-row { display: flex; align-items: center; gap: 8px; }
-.custom-definition-row label { flex: 0 0 auto; color: #34434d; font-size: 14px; }
-.custom-definition-input {
-  flex: 1 1 360px;
-  min-width: 180px;
+.definition-signature { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.definition-signature label { display: flex; align-items: center; gap: 6px; color: #34434d; font-size: 14px; }
+.definition-name-input, .definition-parameters-input {
+  min-width: 96px;
   min-height: 38px;
   padding: 7px 10px;
   border: 1px solid var(--line-strong);
@@ -171,7 +170,20 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   color: #24313b;
   font-family: Cambria, "Times New Roman", serif;
 }
-.custom-definition-input:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+.definition-parameters-input { min-width: 150px; }
+.definition-name-input:focus-visible, .definition-parameters-input:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+.definition-expression-row { display: flex; align-items: flex-start; gap: 8px; }
+.definition-signature-preview, .definition-equals { padding-top: 9px; font-family: Cambria, "Times New Roman", serif; font-size: 20px; font-weight: 700; white-space: nowrap; }
+.definition-expression { flex: 1 1 330px; min-width: 180px; min-height: 46px; padding: 7px 10px; border: 1px solid var(--line-strong); background: #fbfcfc; font-family: Cambria, "Times New Roman", serif; overflow-x: auto; }
+.definition-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.definition-source-label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 12px; }
+.definition-source-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.definition-source { min-height: 32px; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: #f7f9fa; color: #24313b; font-family: Cambria, "Times New Roman", serif; cursor: grab; }
+.definition-source:active { cursor: grabbing; }
+.definition-slot { display: inline-flex; min-width: 42px; min-height: 30px; padding: 3px 7px; border: 1px dashed #7daab0; border-radius: 4px; background: #f4fbfc; color: #5e7b80; font-family: inherit; vertical-align: middle; cursor: pointer; }
+.definition-slot.selected, .definition-slot.drag-over { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+.definition-call { display: inline; white-space: nowrap; }
+.definition-call .definition-slot { margin: 0 2px; }
 .custom-definition-status { min-height: 20px; margin-top: 5px; color: var(--muted); font-size: 13px; }
 .custom-definition-status.error { color: var(--danger); }
 .custom-formula-line { min-height: 56px; margin-top: 4px; }
@@ -340,8 +352,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   .calculator, .function-application-section, .function-definition-section, .values-section, .details-section { padding: 20px 16px; }
   .formula-line { gap: 7px; flex-wrap: wrap; overflow-x: visible; }
   .formula-name, .formula-punctuation { font-size: 21px; }
-  .custom-definition-row { align-items: stretch; flex-wrap: wrap; }
-  .custom-definition-input { flex-basis: 100%; width: 100%; }
+  .definition-expression-row { flex-wrap: wrap; }
+  .definition-expression { flex-basis: 100%; width: 100%; }
+  .definition-sources { grid-template-columns: 1fr; }
   .custom-input-slots { gap: 7px; flex-wrap: wrap; }
   .custom-input-slots .formula-punctuation { font-size: 21px; }
   .input-slot { width: 96px; }
@@ -388,11 +401,20 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
     <section class="function-definition-section" aria-labelledby="customDefinitionTitle">
       <h2 id="customDefinitionTitle">函数定义</h2>
-      <div class="custom-definition-row">
-        <label for="customDefinition">定义</label>
-        <input id="customDefinition" class="custom-definition-input" type="text"
-          placeholder="例如 f(x) = EML(x, 1)" autocomplete="off">
+      <div class="definition-signature">
+        <label>函数名 <input id="customDefinitionName" class="definition-name-input" type="text" placeholder="f" autocomplete="off"></label>
+        <label>变量 <input id="customDefinitionParameters" class="definition-parameters-input" type="text" placeholder="x, y" autocomplete="off"></label>
+      </div>
+      <div class="definition-expression-row">
+        <span id="customDefinitionSignature" class="definition-signature-preview">f(x)</span>
+        <span class="definition-equals">=</span>
+        <div id="customDefinitionExpression" class="definition-expression" aria-label="函数表达式"></div>
         <button type="button" id="customApplyButton">保存定义</button>
+      </div>
+      <div class="definition-sources" aria-label="函数定义可用来源">
+        <div><span class="definition-source-label">函数</span><div id="definitionFunctionSources" class="definition-source-list"></div></div>
+        <div><span class="definition-source-label">变量</span><div id="definitionParameterSources" class="definition-source-list"></div></div>
+        <div><span class="definition-source-label">数值</span><div id="definitionValueSources" class="definition-source-list"></div></div>
       </div>
       <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
     </section>
@@ -1591,6 +1613,59 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return `${definition.name}(${definition.parameterNames.join(", ")}) = ${renderBody(definition.body)}`;
   }
 
+  function createDefinition(name, parameterNames, body) {
+    if (typeof name !== "string" || !IDENTIFIER.test(name)) return { ok: false, error: "函数名必须以英文字母开头。" };
+    if (!Array.isArray(parameterNames) || parameterNames.length < 1 || parameterNames.length > MAX_PARAMETERS) {
+      return { ok: false, error: `请输入 1 到 ${MAX_PARAMETERS} 个参数。` };
+    }
+    if (parameterNames.some((parameter) => typeof parameter !== "string" || !IDENTIFIER.test(parameter) || parameter === "EML")) {
+      return { ok: false, error: "参数名必须以英文字母开头，且不能使用 EML。" };
+    }
+    if (new Set(parameterNames).size !== parameterNames.length) return { ok: false, error: "参数名不能重复。" };
+
+    let error = "";
+    function validate(node, depth) {
+      if (error) return;
+      if (!node || typeof node !== "object") {
+        error = "表达式中仍有未填入的输入槽。";
+        return;
+      }
+      if (depth > MAX_NESTING) {
+        error = `EML 嵌套不能超过 ${MAX_NESTING} 层。`;
+        return;
+      }
+      if (node.type === "parameter") {
+        if (!parameterNames.includes(node.name)) error = `参数 ${node.name} 未声明。`;
+        return;
+      }
+      if (node.type === "constant") {
+        if (!Expr.isValidExpression(node.expression) || typeof node.displayText !== "string") error = "函数体中的固定数值无效。";
+        return;
+      }
+      if (node.type === "eml") {
+        validate(node.left, depth + 1);
+        validate(node.right, depth + 1);
+        return;
+      }
+      if (node.type === "call" && typeof node.name === "string" && Array.isArray(node.arguments)) {
+        node.arguments.forEach((argument) => validate(argument, depth + 1));
+        return;
+      }
+      error = "函数体只能使用函数调用、参数或固定数值。";
+    }
+    validate(body, 1);
+    if (error) return { ok: false, error };
+    if (!['eml', 'call'].includes(body.type)) return { ok: false, error: "函数体至少需要一个 EML 或已定义函数调用。" };
+
+    const definition = {
+      name,
+      parameterNames: [...parameterNames],
+      body: JSON.parse(JSON.stringify(body)),
+    };
+    const displayText = renderDefinition(definition);
+    return { ok: true, definition: { ...definition, displayText, canonicalKey: displayText.replace(/\s/g, "") } };
+  }
+
   function parseDefinition(text) {
     if (typeof text !== "string" || text.trim().length === 0) {
       return { ok: false, error: "请输入 EML 组合函数定义。" };
@@ -1679,12 +1754,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (index !== source.length) return fail("函数定义末尾存在无法识别的内容。");
     if (!["eml", "call"].includes(body.node.type)) return fail("函数体至少需要一个 EML 或已定义函数调用。");
 
-    const definition = { name, parameterNames, body: body.node };
-    const displayText = renderDefinition(definition);
-    return {
-      ok: true,
-      definition: { ...definition, displayText, canonicalKey: displayText.replace(/\s/g, "") },
-    };
+    return createDefinition(name, parameterNames, body.node);
   }
 
   function definitionMap(definitions) {
@@ -1833,6 +1903,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     MAX_NESTING,
     MAX_DEFINITION_LENGTH,
     IDENTIFIER,
+    createDefinition,
     parseDefinition,
     validateDefinitionCalls,
     renderBody,
@@ -1869,7 +1940,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (Array.isArray(state?.customFunctions)) {
       return state.customFunctions
         .filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && typeof item.definitionText === "string" && Array.isArray(item.inputValueIds))
-        .map((item) => ({ id: item.id, name: item.name, definitionText: item.definitionText, inputValueIds: item.inputValueIds.slice(0, MAX_CUSTOM_INPUTS) }));
+        .map((item) => ({ id: item.id, name: item.name, definitionText: item.definitionText, definitionAst: item.definitionAst || null, inputValueIds: item.inputValueIds.slice(0, MAX_CUSTOM_INPUTS) }));
     }
     const legacy = state?.customFunction;
     if (legacy?.definitionText && Array.isArray(legacy.inputValueIds)) {
@@ -2167,12 +2238,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return next;
   }
 
-  function addCustomFunction(state, name, definitionText, inputCount) {
+  function addCustomFunction(state, name, definitionText, inputCount, definitionAst = null) {
     if (typeof name !== "string" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(name) || typeof definitionText !== "string" || !Number.isInteger(inputCount) || inputCount < 1 || inputCount > MAX_CUSTOM_INPUTS) return { state, status: "invalid" };
     const functions = getCustomFunctions(state);
     if (functions.some((item) => item.name === name)) return { state, status: "duplicate-name" };
     const next = cloneState(state);
-    next.customFunctions = functions.concat({ id: customFunctionIdFor(name), name, definitionText, inputValueIds: Array(inputCount).fill(null) });
+    next.customFunctions = functions.concat({ id: customFunctionIdFor(name), name, definitionText, definitionAst, inputValueIds: Array(inputCount).fill(null) });
     delete next.customFunction;
     return { state: next, status: "added", functionId: customFunctionIdFor(name) };
   }
@@ -2366,7 +2437,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const next = migrateCustomFunctions(candidate);
     const definitions = new Map();
     for (const custom of next.customFunctions) {
-      const parsed = Composition.parseDefinition(custom.definitionText);
+      const parsed = custom.definitionAst
+        ? Composition.createDefinition(custom.name, custom.definitionAst.parameterNames, custom.definitionAst.body)
+        : Composition.parseDefinition(custom.definitionText);
       if (parsed.ok) definitions.set(parsed.definition.name, parsed.definition);
     }
 
@@ -2494,6 +2567,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         custom.inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
         custom.inputValueIds.some((valueId) => valueId !== null && !candidate.values[valueId])
       ) return { ok: false, error: "组合函数状态无效" };
+      if (custom.definitionAst) {
+        const parsed = Composition.createDefinition(custom.name, custom.definitionAst.parameterNames, custom.definitionAst.body);
+        if (!parsed.ok) return { ok: false, error: "组合函数表达式无效" };
+      }
     }
 
     if (hasDependencyCycle(candidate)) return { ok: false, error: "公式来源存在循环引用" };
@@ -2892,7 +2969,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     customFunctionApplications: document.getElementById("customFunctionApplications"),
-    customDefinition: document.getElementById("customDefinition"),
+    customDefinitionName: document.getElementById("customDefinitionName"),
+    customDefinitionParameters: document.getElementById("customDefinitionParameters"),
+    customDefinitionSignature: document.getElementById("customDefinitionSignature"),
+    customDefinitionExpression: document.getElementById("customDefinitionExpression"),
+    definitionFunctionSources: document.getElementById("definitionFunctionSources"),
+    definitionParameterSources: document.getElementById("definitionParameterSources"),
+    definitionValueSources: document.getElementById("definitionValueSources"),
     customApply: document.getElementById("customApplyButton"),
     customDefinitionStatus: document.getElementById("customDefinitionStatus"),
   };
@@ -2902,6 +2985,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const undoHistory = [];
   const MAX_UNDO_HISTORY = 100;
   let customDefinitionError = "";
+  let definitionDraft = { body: null, selectedPath: "root" };
   let pointerDrag = null;
   let suppressValueClick = false;
   let treeDepth = Infinity;
@@ -3010,15 +3094,133 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     elements.add.disabled = false;
   }
 
+  function definitionForCustom(custom) {
+    if (custom.definitionAst) {
+      return Composition.createDefinition(custom.name, custom.definitionAst.parameterNames, custom.definitionAst.body);
+    }
+    return Composition.parseDefinition(custom.definitionText);
+  }
+
+  function draftParameters() {
+    return elements.customDefinitionParameters.value.split(",").map((name) => name.trim()).filter(Boolean);
+  }
+
+  function definitionSlot(path, label = "拖入") {
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.className = "definition-slot";
+    slot.dataset.definitionPath = path;
+    slot.textContent = label;
+    slot.title = "拖入函数、变量或数值";
+    slot.classList.toggle("selected", definitionDraft.selectedPath === path);
+    bindDefinitionSlot(slot, path);
+    return slot;
+  }
+
+  function renderDefinitionNode(node, path) {
+    if (!node) return definitionSlot(path);
+    if (node.type === "parameter" || node.type === "constant") {
+      const value = document.createElement("span");
+      value.textContent = node.type === "parameter" ? node.name : node.displayText;
+      return value;
+    }
+    const call = document.createElement("span");
+    call.className = "definition-call";
+    call.append(`${node.type === "eml" ? "EML" : node.name}(`);
+    const children = node.type === "eml" ? [node.left, node.right] : node.arguments;
+    children.forEach((child, index) => {
+      if (index > 0) call.append(", ");
+      call.appendChild(renderDefinitionNode(child, `${path}.${node.type === "eml" ? (index === 0 ? "left" : "right") : `arguments.${index}`}`));
+    });
+    call.append(")");
+    return call;
+  }
+
+  function nodeAtDefinitionPath(path) {
+    if (path === "root") return { parent: definitionDraft, key: "body" };
+    const parts = path.split(".").slice(1);
+    let parent = definitionDraft.body;
+    for (let index = 0; index < parts.length - 1; index += 1) parent = parent?.[parts[index]];
+    return { parent, key: parts.at(-1) };
+  }
+
+  function placeDefinitionNode(path, node) {
+    const target = nodeAtDefinitionPath(path);
+    if (!target.parent || !target.key) return;
+    target.parent[target.key] = node;
+    definitionDraft.selectedPath = path;
+    customDefinitionError = "";
+    renderDefinitionBuilder();
+  }
+
+  function functionNode(name, inputCount) {
+    return name === "EML"
+      ? { type: "eml", left: null, right: null }
+      : { type: "call", name, arguments: Array(inputCount).fill(null) };
+  }
+
+  function definitionSource(kind, label, payload) {
+    const source = document.createElement("button");
+    source.type = "button";
+    source.className = "definition-source";
+    source.textContent = label;
+    source.draggable = true;
+    source.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("application/x-eml-definition-source", JSON.stringify({ kind, payload }));
+      event.dataTransfer.effectAllowed = "copy";
+    });
+    source.addEventListener("click", () => applyDefinitionSource({ kind, payload }));
+    return source;
+  }
+
+  function applyDefinitionSource(source, path = definitionDraft.selectedPath) {
+    if (!path) return;
+    if (source.kind === "function") placeDefinitionNode(path, functionNode(source.payload.name, source.payload.inputCount));
+    if (source.kind === "parameter") placeDefinitionNode(path, { type: "parameter", name: source.payload.name });
+    if (source.kind === "value") placeDefinitionNode(path, { type: "constant", expression: source.payload.expression, displayText: source.payload.displayText });
+  }
+
+  function bindDefinitionSlot(slot, path) {
+    slot.addEventListener("dragover", (event) => { event.preventDefault(); slot.classList.add("drag-over"); });
+    slot.addEventListener("dragleave", () => slot.classList.remove("drag-over"));
+    slot.addEventListener("drop", (event) => {
+      event.preventDefault();
+      slot.classList.remove("drag-over");
+      const raw = event.dataTransfer.getData("application/x-eml-definition-source");
+      if (!raw) return;
+      try { applyDefinitionSource(JSON.parse(raw), path); } catch { showNotice("拖入内容无效。", true); }
+    });
+    slot.addEventListener("click", () => { definitionDraft.selectedPath = path; renderDefinitionBuilder(); });
+  }
+
+  function renderDefinitionBuilder() {
+    const name = elements.customDefinitionName.value.trim() || "f";
+    const parameters = draftParameters();
+    elements.customDefinitionSignature.textContent = `${name}(${parameters.join(", ") || "…"})`;
+    elements.customDefinitionExpression.replaceChildren(renderDefinitionNode(definitionDraft.body, "root"));
+    elements.definitionFunctionSources.replaceChildren(definitionSource("function", "EML", { name: "EML", inputCount: 2 }));
+    Store.getCustomFunctions(state).forEach((custom) => {
+      const parsed = definitionForCustom(custom);
+      if (parsed.ok) elements.definitionFunctionSources.appendChild(definitionSource("function", parsed.definition.name, { name: parsed.definition.name, inputCount: parsed.definition.parameterNames.length }));
+    });
+    elements.definitionParameterSources.replaceChildren();
+    parameters.forEach((name) => elements.definitionParameterSources.appendChild(definitionSource("parameter", name, { name })));
+    elements.definitionValueSources.replaceChildren();
+    state.valueOrder.forEach((valueId) => {
+      const value = state.values[valueId];
+      if (value) elements.definitionValueSources.appendChild(definitionSource("value", value.displayText, { expression: value.canonicalExpression, displayText: value.displayText }));
+    });
+  }
+
   function renderCustomCalculators() {
     elements.customFunctionApplications.replaceChildren();
     const functions = Store.getCustomFunctions(state);
     const definitions = functions
-      .map((custom) => Composition.parseDefinition(custom.definitionText))
+      .map(definitionForCustom)
       .filter((parsed) => parsed.ok)
       .map((parsed) => parsed.definition);
     for (const custom of functions) {
-      const parsed = Composition.parseDefinition(custom.definitionText);
+      const parsed = definitionForCustom(custom);
       if (!parsed.ok) continue;
       const definition = parsed.definition;
       const panel = document.createElement("div");
@@ -3079,7 +3281,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       panel.appendChild(remove);
       elements.customFunctionApplications.appendChild(panel);
     }
-    elements.customDefinitionStatus.textContent = customDefinitionError || "支持多个函数；只允许参数名和 EML(...) 的嵌套组合。";
+    elements.customDefinitionStatus.textContent = customDefinitionError || "拖入函数、变量或数值构造表达式；数值会作为固定表达式保存。";
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
   }
 
@@ -3155,19 +3357,21 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         if (distance > 6) pointerDrag.active = true;
         if (!pointerDrag.active) return;
         event.preventDefault();
-        document.querySelectorAll(".input-slot").forEach((slot) => slot.classList.remove("drag-over"));
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot");
+        document.querySelectorAll(".input-slot, .definition-slot").forEach((slot) => slot.classList.remove("drag-over"));
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
         if (target) target.classList.add("drag-over");
       });
       button.addEventListener("pointerup", (event) => {
         if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
         const drag = pointerDrag;
         pointerDrag = null;
-        document.querySelectorAll(".input-slot").forEach((slot) => slot.classList.remove("drag-over"));
+        document.querySelectorAll(".input-slot, .definition-slot").forEach((slot) => slot.classList.remove("drag-over"));
         if (!drag.active) return;
         suppressValueClick = true;
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot");
-        if (target) assignInput(target.dataset.slot, drag.valueId);
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
+        if (target?.classList.contains("definition-slot")) {
+          applyDefinitionSource({ kind: "value", payload: { expression: value.canonicalExpression, displayText: value.displayText } }, target.dataset.definitionPath);
+        } else if (target) assignInput(target.dataset.slot, drag.valueId);
       });
 
       item.appendChild(button);
@@ -3429,6 +3633,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   function render() {
     renderCalculator();
     renderCustomCalculators();
+    renderDefinitionBuilder();
     renderValues();
     renderDetails();
   }
@@ -3475,14 +3680,18 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   bindSlot(elements.slotY, "y");
 
   elements.customApply.addEventListener("click", () => {
-    const parsed = Composition.parseDefinition(elements.customDefinition.value);
+    const parsed = Composition.createDefinition(
+      elements.customDefinitionName.value.trim(),
+      draftParameters(),
+      definitionDraft.body
+    );
     if (!parsed.ok) {
       customDefinitionError = parsed.error;
       render();
       return;
     }
     const existingDefinitions = Store.getCustomFunctions(state)
-      .map((custom) => Composition.parseDefinition(custom.definitionText))
+      .map(definitionForCustom)
       .filter((existing) => existing.ok)
       .map((existing) => existing.definition);
     const callValidation = Composition.validateDefinitionCalls(parsed.definition, existingDefinitions);
@@ -3491,7 +3700,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       render();
       return;
     }
-    const result = Store.addCustomFunction(state, parsed.definition.name, parsed.definition.displayText, parsed.definition.parameterNames.length);
+    const result = Store.addCustomFunction(
+      state,
+      parsed.definition.name,
+      parsed.definition.displayText,
+      parsed.definition.parameterNames.length,
+      { parameterNames: parsed.definition.parameterNames, body: parsed.definition.body }
+    );
     if (result.status !== "added") {
       customDefinitionError = result.status === "duplicate-name" ? "同名函数已存在，请使用其他函数名。" : "函数定义无效。";
       render();
@@ -3499,7 +3714,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }
     commitState(result.state);
     customDefinitionError = "";
-    elements.customDefinition.value = "";
+    elements.customDefinitionName.value = "";
+    elements.customDefinitionParameters.value = "";
+    definitionDraft = { body: null, selectedPath: "root" };
     showNotice(`已添加函数 ${parsed.definition.name}。`, false);
     render();
   });
@@ -3589,6 +3806,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       event.preventDefault();
       undoLastChange();
     }
+  });
+
+  [elements.customDefinitionName, elements.customDefinitionParameters].forEach((input) => {
+    input.addEventListener("input", () => {
+      customDefinitionError = "";
+      renderDefinitionBuilder();
+    });
   });
 
   recomputePreview();

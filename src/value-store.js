@@ -23,7 +23,7 @@
     if (Array.isArray(state?.customFunctions)) {
       return state.customFunctions
         .filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && typeof item.definitionText === "string" && Array.isArray(item.inputValueIds))
-        .map((item) => ({ id: item.id, name: item.name, definitionText: item.definitionText, inputValueIds: item.inputValueIds.slice(0, MAX_CUSTOM_INPUTS) }));
+        .map((item) => ({ id: item.id, name: item.name, definitionText: item.definitionText, definitionAst: item.definitionAst || null, inputValueIds: item.inputValueIds.slice(0, MAX_CUSTOM_INPUTS) }));
     }
     const legacy = state?.customFunction;
     if (legacy?.definitionText && Array.isArray(legacy.inputValueIds)) {
@@ -321,12 +321,12 @@
     return next;
   }
 
-  function addCustomFunction(state, name, definitionText, inputCount) {
+  function addCustomFunction(state, name, definitionText, inputCount, definitionAst = null) {
     if (typeof name !== "string" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(name) || typeof definitionText !== "string" || !Number.isInteger(inputCount) || inputCount < 1 || inputCount > MAX_CUSTOM_INPUTS) return { state, status: "invalid" };
     const functions = getCustomFunctions(state);
     if (functions.some((item) => item.name === name)) return { state, status: "duplicate-name" };
     const next = cloneState(state);
-    next.customFunctions = functions.concat({ id: customFunctionIdFor(name), name, definitionText, inputValueIds: Array(inputCount).fill(null) });
+    next.customFunctions = functions.concat({ id: customFunctionIdFor(name), name, definitionText, definitionAst, inputValueIds: Array(inputCount).fill(null) });
     delete next.customFunction;
     return { state: next, status: "added", functionId: customFunctionIdFor(name) };
   }

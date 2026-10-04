@@ -35,6 +35,26 @@ test("UCF05 嵌套 EML 使用多个输入得到符号结果", () => {
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_ONE"));
 });
 
+test("VF04 可视化定义可固定保存数值栏中的符号表达式", () => {
+  const definition = Composition.createDefinition("f", ["x"], {
+    type: "eml",
+    left: { type: "parameter", name: "x" },
+    right: { type: "constant", expression: Expr.ln(Expr.integer(2)), displayText: "ln(2)" },
+  });
+  assert.equal(definition.ok, true);
+  assert.equal(definition.definition.displayText, "f(x) = EML(x, ln(2))");
+  const result = Composition.evaluate(definition.definition, [Expr.ONE]);
+  assert.equal(result.ok, true);
+  assert.equal(result.directFormula, "EML(1, ln(2)) = e - ln(ln(2))");
+});
+
+test("VF05 可视化定义拒绝未填入的表达式槽", () => {
+  const definition = Composition.createDefinition("f", ["x"], {
+    type: "eml", left: { type: "parameter", name: "x" }, right: null,
+  });
+  assert.deepEqual(definition, { ok: false, error: "表达式中仍有未填入的输入槽。" });
+});
+
 test("组合函数传播内层 EML 的定义域错误", () => {
   const parsed = Composition.parseDefinition("F(x, y, z) = EML(x, EML(y, z))");
   const result = Composition.evaluate(parsed.definition, [Expr.ONE, Expr.ONE, Expr.ZERO]);

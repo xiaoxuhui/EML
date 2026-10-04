@@ -38,7 +38,9 @@
     const next = migrateCustomFunctions(candidate);
     const definitions = new Map();
     for (const custom of next.customFunctions) {
-      const parsed = Composition.parseDefinition(custom.definitionText);
+      const parsed = custom.definitionAst
+        ? Composition.createDefinition(custom.name, custom.definitionAst.parameterNames, custom.definitionAst.body)
+        : Composition.parseDefinition(custom.definitionText);
       if (parsed.ok) definitions.set(parsed.definition.name, parsed.definition);
     }
 
@@ -166,6 +168,10 @@
         custom.inputValueIds.length > ValueStore.MAX_CUSTOM_INPUTS ||
         custom.inputValueIds.some((valueId) => valueId !== null && !candidate.values[valueId])
       ) return { ok: false, error: "组合函数状态无效" };
+      if (custom.definitionAst) {
+        const parsed = Composition.createDefinition(custom.name, custom.definitionAst.parameterNames, custom.definitionAst.body);
+        if (!parsed.ok) return { ok: false, error: "组合函数表达式无效" };
+      }
     }
 
     if (hasDependencyCycle(candidate)) return { ok: false, error: "公式来源存在循环引用" };

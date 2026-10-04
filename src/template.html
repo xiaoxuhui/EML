@@ -45,11 +45,20 @@
 
     <section class="function-definition-section" aria-labelledby="customDefinitionTitle">
       <h2 id="customDefinitionTitle">函数定义</h2>
-      <div class="custom-definition-row">
-        <label for="customDefinition">定义</label>
-        <input id="customDefinition" class="custom-definition-input" type="text"
-          placeholder="例如 f(x) = EML(x, 1)" autocomplete="off">
+      <div class="definition-signature">
+        <label>函数名 <input id="customDefinitionName" class="definition-name-input" type="text" placeholder="f" autocomplete="off"></label>
+        <label>变量 <input id="customDefinitionParameters" class="definition-parameters-input" type="text" placeholder="x, y" autocomplete="off"></label>
+      </div>
+      <div class="definition-expression-row">
+        <span id="customDefinitionSignature" class="definition-signature-preview">f(x)</span>
+        <span class="definition-equals">=</span>
+        <div id="customDefinitionExpression" class="definition-expression" aria-label="函数表达式"></div>
         <button type="button" id="customApplyButton">保存定义</button>
+      </div>
+      <div class="definition-sources" aria-label="函数定义可用来源">
+        <div><span class="definition-source-label">函数</span><div id="definitionFunctionSources" class="definition-source-list"></div></div>
+        <div><span class="definition-source-label">变量</span><div id="definitionParameterSources" class="definition-source-list"></div></div>
+        <div><span class="definition-source-label">数值</span><div id="definitionValueSources" class="definition-source-list"></div></div>
       </div>
       <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
     </section>

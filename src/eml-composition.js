@@ -28,6 +28,59 @@
     return `${definition.name}(${definition.parameterNames.join(", ")}) = ${renderBody(definition.body)}`;
   }
 
+  function createDefinition(name, parameterNames, body) {
+    if (typeof name !== "string" || !IDENTIFIER.test(name)) return { ok: false, error: "函数名必须以英文字母开头。" };
+    if (!Array.isArray(parameterNames) || parameterNames.length < 1 || parameterNames.length > MAX_PARAMETERS) {
+      return { ok: false, error: `请输入 1 到 ${MAX_PARAMETERS} 个参数。` };
+    }
+    if (parameterNames.some((parameter) => typeof parameter !== "string" || !IDENTIFIER.test(parameter) || parameter === "EML")) {
+      return { ok: false, error: "参数名必须以英文字母开头，且不能使用 EML。" };
+    }
+    if (new Set(parameterNames).size !== parameterNames.length) return { ok: false, error: "参数名不能重复。" };
+
+    let error = "";
+    function validate(node, depth) {
+      if (error) return;
+      if (!node || typeof node !== "object") {
+        error = "表达式中仍有未填入的输入槽。";
+        return;
+      }
+      if (depth > MAX_NESTING) {
+        error = `EML 嵌套不能超过 ${MAX_NESTING} 层。`;
+        return;
+      }
+      if (node.type === "parameter") {
+        if (!parameterNames.includes(node.name)) error = `参数 ${node.name} 未声明。`;
+        return;
+      }
+      if (node.type === "constant") {
+        if (!Expr.isValidExpression(node.expression) || typeof node.displayText !== "string") error = "函数体中的固定数值无效。";
+        return;
+      }
+      if (node.type === "eml") {
+        validate(node.left, depth + 1);
+        validate(node.right, depth + 1);
+        return;
+      }
+      if (node.type === "call" && typeof node.name === "string" && Array.isArray(node.arguments)) {
+        node.arguments.forEach((argument) => validate(argument, depth + 1));
+        return;
+      }
+      error = "函数体只能使用函数调用、参数或固定数值。";
+    }
+    validate(body, 1);
+    if (error) return { ok: false, error };
+    if (!['eml', 'call'].includes(body.type)) return { ok: false, error: "函数体至少需要一个 EML 或已定义函数调用。" };
+
+    const definition = {
+      name,
+      parameterNames: [...parameterNames],
+      body: JSON.parse(JSON.stringify(body)),
+    };
+    const displayText = renderDefinition(definition);
+    return { ok: true, definition: { ...definition, displayText, canonicalKey: displayText.replace(/\s/g, "") } };
+  }
+
   function parseDefinition(text) {
     if (typeof text !== "string" || text.trim().length === 0) {
       return { ok: false, error: "请输入 EML 组合函数定义。" };
@@ -116,12 +169,7 @@
     if (index !== source.length) return fail("函数定义末尾存在无法识别的内容。");
     if (!["eml", "call"].includes(body.node.type)) return fail("函数体至少需要一个 EML 或已定义函数调用。");
 
-    const definition = { name, parameterNames, body: body.node };
-    const displayText = renderDefinition(definition);
-    return {
-      ok: true,
-      definition: { ...definition, displayText, canonicalKey: displayText.replace(/\s/g, "") },
-    };
+    return createDefinition(name, parameterNames, body.node);
   }
 
   function definitionMap(definitions) {
@@ -270,6 +318,7 @@
     MAX_NESTING,
     MAX_DEFINITION_LENGTH,
     IDENTIFIER,
+    createDefinition,
     parseDefinition,
     validateDefinitionCalls,
     renderBody,

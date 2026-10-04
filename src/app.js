@@ -35,7 +35,13 @@
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
     customFunctionApplications: document.getElementById("customFunctionApplications"),
-    customDefinition: document.getElementById("customDefinition"),
+    customDefinitionName: document.getElementById("customDefinitionName"),
+    customDefinitionParameters: document.getElementById("customDefinitionParameters"),
+    customDefinitionSignature: document.getElementById("customDefinitionSignature"),
+    customDefinitionExpression: document.getElementById("customDefinitionExpression"),
+    definitionFunctionSources: document.getElementById("definitionFunctionSources"),
+    definitionParameterSources: document.getElementById("definitionParameterSources"),
+    definitionValueSources: document.getElementById("definitionValueSources"),
     customApply: document.getElementById("customApplyButton"),
     customDefinitionStatus: document.getElementById("customDefinitionStatus"),
   };
@@ -45,6 +51,7 @@
   const undoHistory = [];
   const MAX_UNDO_HISTORY = 100;
   let customDefinitionError = "";
+  let definitionDraft = { body: null, selectedPath: "root" };
   let pointerDrag = null;
   let suppressValueClick = false;
   let treeDepth = Infinity;
@@ -153,15 +160,133 @@
     elements.add.disabled = false;
   }
 
+  function definitionForCustom(custom) {
+    if (custom.definitionAst) {
+      return Composition.createDefinition(custom.name, custom.definitionAst.parameterNames, custom.definitionAst.body);
+    }
+    return Composition.parseDefinition(custom.definitionText);
+  }
+
+  function draftParameters() {
+    return elements.customDefinitionParameters.value.split(",").map((name) => name.trim()).filter(Boolean);
+  }
+
+  function definitionSlot(path, label = "拖入") {
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.className = "definition-slot";
+    slot.dataset.definitionPath = path;
+    slot.textContent = label;
+    slot.title = "拖入函数、变量或数值";
+    slot.classList.toggle("selected", definitionDraft.selectedPath === path);
+    bindDefinitionSlot(slot, path);
+    return slot;
+  }
+
+  function renderDefinitionNode(node, path) {
+    if (!node) return definitionSlot(path);
+    if (node.type === "parameter" || node.type === "constant") {
+      const value = document.createElement("span");
+      value.textContent = node.type === "parameter" ? node.name : node.displayText;
+      return value;
+    }
+    const call = document.createElement("span");
+    call.className = "definition-call";
+    call.append(`${node.type === "eml" ? "EML" : node.name}(`);
+    const children = node.type === "eml" ? [node.left, node.right] : node.arguments;
+    children.forEach((child, index) => {
+      if (index > 0) call.append(", ");
+      call.appendChild(renderDefinitionNode(child, `${path}.${node.type === "eml" ? (index === 0 ? "left" : "right") : `arguments.${index}`}`));
+    });
+    call.append(")");
+    return call;
+  }
+
+  function nodeAtDefinitionPath(path) {
+    if (path === "root") return { parent: definitionDraft, key: "body" };
+    const parts = path.split(".").slice(1);
+    let parent = definitionDraft.body;
+    for (let index = 0; index < parts.length - 1; index += 1) parent = parent?.[parts[index]];
+    return { parent, key: parts.at(-1) };
+  }
+
+  function placeDefinitionNode(path, node) {
+    const target = nodeAtDefinitionPath(path);
+    if (!target.parent || !target.key) return;
+    target.parent[target.key] = node;
+    definitionDraft.selectedPath = path;
+    customDefinitionError = "";
+    renderDefinitionBuilder();
+  }
+
+  function functionNode(name, inputCount) {
+    return name === "EML"
+      ? { type: "eml", left: null, right: null }
+      : { type: "call", name, arguments: Array(inputCount).fill(null) };
+  }
+
+  function definitionSource(kind, label, payload) {
+    const source = document.createElement("button");
+    source.type = "button";
+    source.className = "definition-source";
+    source.textContent = label;
+    source.draggable = true;
+    source.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("application/x-eml-definition-source", JSON.stringify({ kind, payload }));
+      event.dataTransfer.effectAllowed = "copy";
+    });
+    source.addEventListener("click", () => applyDefinitionSource({ kind, payload }));
+    return source;
+  }
+
+  function applyDefinitionSource(source, path = definitionDraft.selectedPath) {
+    if (!path) return;
+    if (source.kind === "function") placeDefinitionNode(path, functionNode(source.payload.name, source.payload.inputCount));
+    if (source.kind === "parameter") placeDefinitionNode(path, { type: "parameter", name: source.payload.name });
+    if (source.kind === "value") placeDefinitionNode(path, { type: "constant", expression: source.payload.expression, displayText: source.payload.displayText });
+  }
+
+  function bindDefinitionSlot(slot, path) {
+    slot.addEventListener("dragover", (event) => { event.preventDefault(); slot.classList.add("drag-over"); });
+    slot.addEventListener("dragleave", () => slot.classList.remove("drag-over"));
+    slot.addEventListener("drop", (event) => {
+      event.preventDefault();
+      slot.classList.remove("drag-over");
+      const raw = event.dataTransfer.getData("application/x-eml-definition-source");
+      if (!raw) return;
+      try { applyDefinitionSource(JSON.parse(raw), path); } catch { showNotice("拖入内容无效。", true); }
+    });
+    slot.addEventListener("click", () => { definitionDraft.selectedPath = path; renderDefinitionBuilder(); });
+  }
+
+  function renderDefinitionBuilder() {
+    const name = elements.customDefinitionName.value.trim() || "f";
+    const parameters = draftParameters();
+    elements.customDefinitionSignature.textContent = `${name}(${parameters.join(", ") || "…"})`;
+    elements.customDefinitionExpression.replaceChildren(renderDefinitionNode(definitionDraft.body, "root"));
+    elements.definitionFunctionSources.replaceChildren(definitionSource("function", "EML", { name: "EML", inputCount: 2 }));
+    Store.getCustomFunctions(state).forEach((custom) => {
+      const parsed = definitionForCustom(custom);
+      if (parsed.ok) elements.definitionFunctionSources.appendChild(definitionSource("function", parsed.definition.name, { name: parsed.definition.name, inputCount: parsed.definition.parameterNames.length }));
+    });
+    elements.definitionParameterSources.replaceChildren();
+    parameters.forEach((name) => elements.definitionParameterSources.appendChild(definitionSource("parameter", name, { name })));
+    elements.definitionValueSources.replaceChildren();
+    state.valueOrder.forEach((valueId) => {
+      const value = state.values[valueId];
+      if (value) elements.definitionValueSources.appendChild(definitionSource("value", value.displayText, { expression: value.canonicalExpression, displayText: value.displayText }));
+    });
+  }
+
   function renderCustomCalculators() {
     elements.customFunctionApplications.replaceChildren();
     const functions = Store.getCustomFunctions(state);
     const definitions = functions
-      .map((custom) => Composition.parseDefinition(custom.definitionText))
+      .map(definitionForCustom)
       .filter((parsed) => parsed.ok)
       .map((parsed) => parsed.definition);
     for (const custom of functions) {
-      const parsed = Composition.parseDefinition(custom.definitionText);
+      const parsed = definitionForCustom(custom);
       if (!parsed.ok) continue;
       const definition = parsed.definition;
       const panel = document.createElement("div");
@@ -222,7 +347,7 @@
       panel.appendChild(remove);
       elements.customFunctionApplications.appendChild(panel);
     }
-    elements.customDefinitionStatus.textContent = customDefinitionError || "支持多个函数；只允许参数名和 EML(...) 的嵌套组合。";
+    elements.customDefinitionStatus.textContent = customDefinitionError || "拖入函数、变量或数值构造表达式；数值会作为固定表达式保存。";
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
   }
 
@@ -298,19 +423,21 @@
         if (distance > 6) pointerDrag.active = true;
         if (!pointerDrag.active) return;
         event.preventDefault();
-        document.querySelectorAll(".input-slot").forEach((slot) => slot.classList.remove("drag-over"));
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot");
+        document.querySelectorAll(".input-slot, .definition-slot").forEach((slot) => slot.classList.remove("drag-over"));
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
         if (target) target.classList.add("drag-over");
       });
       button.addEventListener("pointerup", (event) => {
         if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
         const drag = pointerDrag;
         pointerDrag = null;
-        document.querySelectorAll(".input-slot").forEach((slot) => slot.classList.remove("drag-over"));
+        document.querySelectorAll(".input-slot, .definition-slot").forEach((slot) => slot.classList.remove("drag-over"));
         if (!drag.active) return;
         suppressValueClick = true;
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot");
-        if (target) assignInput(target.dataset.slot, drag.valueId);
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
+        if (target?.classList.contains("definition-slot")) {
+          applyDefinitionSource({ kind: "value", payload: { expression: value.canonicalExpression, displayText: value.displayText } }, target.dataset.definitionPath);
+        } else if (target) assignInput(target.dataset.slot, drag.valueId);
       });
 
       item.appendChild(button);
@@ -572,6 +699,7 @@
   function render() {
     renderCalculator();
     renderCustomCalculators();
+    renderDefinitionBuilder();
     renderValues();
     renderDetails();
   }
@@ -618,14 +746,18 @@
   bindSlot(elements.slotY, "y");
 
   elements.customApply.addEventListener("click", () => {
-    const parsed = Composition.parseDefinition(elements.customDefinition.value);
+    const parsed = Composition.createDefinition(
+      elements.customDefinitionName.value.trim(),
+      draftParameters(),
+      definitionDraft.body
+    );
     if (!parsed.ok) {
       customDefinitionError = parsed.error;
       render();
       return;
     }
     const existingDefinitions = Store.getCustomFunctions(state)
-      .map((custom) => Composition.parseDefinition(custom.definitionText))
+      .map(definitionForCustom)
       .filter((existing) => existing.ok)
       .map((existing) => existing.definition);
     const callValidation = Composition.validateDefinitionCalls(parsed.definition, existingDefinitions);
@@ -634,7 +766,13 @@
       render();
       return;
     }
-    const result = Store.addCustomFunction(state, parsed.definition.name, parsed.definition.displayText, parsed.definition.parameterNames.length);
+    const result = Store.addCustomFunction(
+      state,
+      parsed.definition.name,
+      parsed.definition.displayText,
+      parsed.definition.parameterNames.length,
+      { parameterNames: parsed.definition.parameterNames, body: parsed.definition.body }
+    );
     if (result.status !== "added") {
       customDefinitionError = result.status === "duplicate-name" ? "同名函数已存在，请使用其他函数名。" : "函数定义无效。";
       render();
@@ -642,7 +780,9 @@
     }
     commitState(result.state);
     customDefinitionError = "";
-    elements.customDefinition.value = "";
+    elements.customDefinitionName.value = "";
+    elements.customDefinitionParameters.value = "";
+    definitionDraft = { body: null, selectedPath: "root" };
     showNotice(`已添加函数 ${parsed.definition.name}。`, false);
     render();
   });
@@ -732,6 +872,13 @@
       event.preventDefault();
       undoLastChange();
     }
+  });
+
+  [elements.customDefinitionName, elements.customDefinitionParameters].forEach((input) => {
+    input.addEventListener("input", () => {
+      customDefinitionError = "";
+      renderDefinitionBuilder();
+    });
   });
 
   recomputePreview();

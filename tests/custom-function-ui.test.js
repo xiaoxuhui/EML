@@ -14,7 +14,16 @@ test("EML 与用户函数共享函数应用区，定义区只负责保存定义"
   const applications = template.indexOf('id="customFunctionApplications"');
   assert.ok(applications > calculatorStart && applications < calculatorEnd);
   assert.ok(definition > calculatorEnd);
-  for (const id of ["customDefinition", "customApplyButton", "customFunctionApplications"]) {
+  for (const id of [
+    "customDefinitionName",
+    "customDefinitionParameters",
+    "customDefinitionExpression",
+    "definitionFunctionSources",
+    "definitionParameterSources",
+    "definitionValueSources",
+    "customApplyButton",
+    "customFunctionApplications",
+  ]) {
     assert.match(template, new RegExp(`id="${id}"`));
   }
 });
@@ -22,6 +31,7 @@ test("EML 与用户函数共享函数应用区，定义区只负责保存定义"
 test("页面将动态槽位接入组合求值与原有添加机制", () => {
   const app = read("src/app.js");
   assert.match(app, /Composition\.parseDefinition/);
+  assert.match(app, /Composition\.createDefinition/);
   assert.match(app, /Composition\.evaluate/);
   assert.match(app, /Store\.addCustomFunction/);
   assert.match(app, /Store\.setCustomInput/);
@@ -30,4 +40,6 @@ test("页面将动态槽位接入组合求值与原有添加机制", () => {
   assert.match(app, /bindSlot\(slot, slot\.dataset\.slot\)/);
   assert.match(app, /undoLastChange/);
   assert.match(app, /event\.key\.toLowerCase\(\) === "z"/);
+  assert.match(app, /application\/x-eml-definition-source/);
+  assert.match(app, /definition-slot/);
 });

@@ -150,11 +150,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
 .function-application-empty { min-height: 64px; display: flex; align-items: center; color: var(--muted); }
 .custom-calculator { margin-top: 0; }
-.custom-definition-row { display: flex; align-items: center; gap: 8px; }
-.custom-definition-row label { flex: 0 0 auto; color: #34434d; font-size: 14px; }
-.custom-definition-input {
-  flex: 1 1 360px;
-  min-width: 180px;
+.definition-signature { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.definition-signature label { display: flex; align-items: center; gap: 6px; color: #34434d; font-size: 14px; }
+.definition-name-input, .definition-parameters-input {
+  min-width: 96px;
   min-height: 38px;
   padding: 7px 10px;
   border: 1px solid var(--line-strong);
@@ -163,7 +162,20 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   color: #24313b;
   font-family: Cambria, "Times New Roman", serif;
 }
-.custom-definition-input:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+.definition-parameters-input { min-width: 150px; }
+.definition-name-input:focus-visible, .definition-parameters-input:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
+.definition-expression-row { display: flex; align-items: flex-start; gap: 8px; }
+.definition-signature-preview, .definition-equals { padding-top: 9px; font-family: Cambria, "Times New Roman", serif; font-size: 20px; font-weight: 700; white-space: nowrap; }
+.definition-expression { flex: 1 1 330px; min-width: 180px; min-height: 46px; padding: 7px 10px; border: 1px solid var(--line-strong); background: #fbfcfc; font-family: Cambria, "Times New Roman", serif; overflow-x: auto; }
+.definition-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.definition-source-label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 12px; }
+.definition-source-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.definition-source { min-height: 32px; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: #f7f9fa; color: #24313b; font-family: Cambria, "Times New Roman", serif; cursor: grab; }
+.definition-source:active { cursor: grabbing; }
+.definition-slot { display: inline-flex; min-width: 42px; min-height: 30px; padding: 3px 7px; border: 1px dashed #7daab0; border-radius: 4px; background: #f4fbfc; color: #5e7b80; font-family: inherit; vertical-align: middle; cursor: pointer; }
+.definition-slot.selected, .definition-slot.drag-over { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+.definition-call { display: inline; white-space: nowrap; }
+.definition-call .definition-slot { margin: 0 2px; }
 .custom-definition-status { min-height: 20px; margin-top: 5px; color: var(--muted); font-size: 13px; }
 .custom-definition-status.error { color: var(--danger); }
 .custom-formula-line { min-height: 56px; margin-top: 4px; }
@@ -332,8 +344,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   .calculator, .function-application-section, .function-definition-section, .values-section, .details-section { padding: 20px 16px; }
   .formula-line { gap: 7px; flex-wrap: wrap; overflow-x: visible; }
   .formula-name, .formula-punctuation { font-size: 21px; }
-  .custom-definition-row { align-items: stretch; flex-wrap: wrap; }
-  .custom-definition-input { flex-basis: 100%; width: 100%; }
+  .definition-expression-row { flex-wrap: wrap; }
+  .definition-expression { flex-basis: 100%; width: 100%; }
+  .definition-sources { grid-template-columns: 1fr; }
   .custom-input-slots { gap: 7px; flex-wrap: wrap; }
   .custom-input-slots .formula-punctuation { font-size: 21px; }
   .input-slot { width: 96px; }

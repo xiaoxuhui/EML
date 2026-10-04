@@ -114,6 +114,24 @@ test("UCF09 与 MF07-MF08：旧保存文件和单函数状态可迁移", () => {
   assert.deepEqual(restored.state.customFunctions, []);
 });
 
+test("VF07 可视化定义随保存文件保留 AST", () => {
+  const definition = Composition.createDefinition("f", ["x"], {
+    type: "eml",
+    left: { type: "parameter", name: "x" },
+    right: { type: "constant", expression: Expr.ln(Expr.integer(2)), displayText: "ln(2)" },
+  }).definition;
+  const added = Store.addCustomFunction(
+    Store.createInitialState(),
+    definition.name,
+    definition.displayText,
+    definition.parameterNames.length,
+    { parameterNames: definition.parameterNames, body: definition.body }
+  );
+  const restored = Persistence.deserialize(Persistence.serialize(added.state));
+  assert.equal(restored.ok, true);
+  assert.equal(restored.state.customFunctions[0].definitionAst.body.right.displayText, "ln(2)");
+});
+
 test("旧组合函数记录迁移为展开的 EML 公式", () => {
   const definition = Composition.parseDefinition("f(x) = EML(x, 1)").definition;
   const evaluation = Composition.evaluate(definition, [Expr.ONE]);
