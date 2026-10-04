@@ -10,7 +10,7 @@
   "use strict";
 
   function create(options) {
-    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton, expandMore, onExpandMore } = options;
+    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton } = options;
     let view = { ...ViewportModel.reset(), valueId: null };
     let pointer = null;
 
@@ -58,7 +58,6 @@
     zoomOut.addEventListener("click", () => zoom(-ViewportModel.SCALE_STEP));
     zoomIn.addEventListener("click", () => zoom(ViewportModel.SCALE_STEP));
     resetButton.addEventListener("click", () => reset());
-    expandMore.addEventListener("click", onExpandMore);
 
     viewport.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;
@@ -106,10 +105,6 @@
         if (view.valueId === valueId) return false;
         view = { ...ViewportModel.reset(), valueId };
         return true;
-      },
-      setExpandable(visible, disabled) {
-        expandMore.hidden = !visible;
-        expandMore.disabled = Boolean(disabled);
       },
       getView: () => ({ scale: view.scale, x: view.x, y: view.y }),
     };

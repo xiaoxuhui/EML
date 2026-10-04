@@ -433,7 +433,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
               <output id="treeZoomLevel" class="zoom-level" aria-live="polite">100%</output>
               <button type="button" id="treeZoomIn" class="icon-button" title="放大计算树" aria-label="放大计算树">+</button>
               <button type="button" id="treeResetView" class="icon-button" title="复位计算树视图" aria-label="复位计算树视图">↺</button>
-              <button type="button" id="treeExpandMore" class="icon-button" title="展开更多计算层级" aria-label="展开更多计算层级">⇣</button>
             </div>
           </div>
           <div id="calculationTreeViewport" class="tree-viewport" tabindex="0" aria-label="完整计算树，可拖动或使用 W A S D 键移动">
@@ -2625,7 +2624,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   "use strict";
 
   function create(options) {
-    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton, expandMore, onExpandMore } = options;
+    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton } = options;
     let view = { ...ViewportModel.reset(), valueId: null };
     let pointer = null;
 
@@ -2673,7 +2672,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     zoomOut.addEventListener("click", () => zoom(-ViewportModel.SCALE_STEP));
     zoomIn.addEventListener("click", () => zoom(ViewportModel.SCALE_STEP));
     resetButton.addEventListener("click", () => reset());
-    expandMore.addEventListener("click", onExpandMore);
 
     viewport.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;
@@ -2721,10 +2719,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         if (view.valueId === valueId) return false;
         view = { ...ViewportModel.reset(), valueId };
         return true;
-      },
-      setExpandable(visible, disabled) {
-        expandMore.hidden = !visible;
-        expandMore.disabled = Boolean(disabled);
       },
       getView: () => ({ scale: view.scale, x: view.x, y: view.y }),
     };
@@ -2889,7 +2883,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     treeZoomIn: document.getElementById("treeZoomIn"),
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
-    treeExpandMore: document.getElementById("treeExpandMore"),
     customFunctionApplications: document.getElementById("customFunctionApplications"),
     customDefinition: document.getElementById("customDefinition"),
     customApply: document.getElementById("customApplyButton"),
@@ -2903,7 +2896,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   let customDefinitionError = "";
   let pointerDrag = null;
   let suppressValueClick = false;
-  let treeDepth = Store.DEFAULT_TREE_DEPTH;
+  let treeDepth = Store.MAX_TREE_DEPTH;
   const treeController = TreeController.create({
     viewport: elements.calculationTreeViewport,
     canvas: elements.calculationTree,
@@ -2911,11 +2904,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     zoomIn: elements.treeZoomIn,
     zoomLevel: elements.treeZoomLevel,
     resetButton: elements.treeResetView,
-    expandMore: elements.treeExpandMore,
-    onExpandMore: () => {
-      treeDepth = Math.min(Store.MAX_TREE_DEPTH, treeDepth + Store.DEFAULT_TREE_DEPTH);
-      renderDetails();
-    },
   });
 
   function restoreState() {
@@ -3383,14 +3371,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       maxNodes: Store.MAX_TREE_NODES,
     });
     if (treeController.ensureValue(state.selectedValueId)) {
-      treeDepth = Store.DEFAULT_TREE_DEPTH;
+      treeDepth = Store.MAX_TREE_DEPTH;
       return renderDetails();
     }
     elements.detailsEmpty.hidden = Boolean(details);
     elements.detailsContent.hidden = !details;
     elements.directFormulaList.replaceChildren();
     elements.calculationTree.replaceChildren();
-    treeController.setExpandable(false, false);
     if (!details) return;
 
     elements.selectedValue.textContent = details.value.displayText;
@@ -3421,8 +3408,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         elements.calculationTree.appendChild(renderDerivation(derivation));
       });
     }
-    const hasDeferredBranches = Store.treeHasDeferredBranches(details.tree);
-    treeController.setExpandable(hasDeferredBranches, treeDepth >= Store.MAX_TREE_DEPTH);
     requestAnimationFrame(treeController.apply);
   }
 

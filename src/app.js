@@ -34,7 +34,6 @@
     treeZoomIn: document.getElementById("treeZoomIn"),
     treeZoomLevel: document.getElementById("treeZoomLevel"),
     treeResetView: document.getElementById("treeResetView"),
-    treeExpandMore: document.getElementById("treeExpandMore"),
     customFunctionApplications: document.getElementById("customFunctionApplications"),
     customDefinition: document.getElementById("customDefinition"),
     customApply: document.getElementById("customApplyButton"),
@@ -48,7 +47,7 @@
   let customDefinitionError = "";
   let pointerDrag = null;
   let suppressValueClick = false;
-  let treeDepth = Store.DEFAULT_TREE_DEPTH;
+  let treeDepth = Store.MAX_TREE_DEPTH;
   const treeController = TreeController.create({
     viewport: elements.calculationTreeViewport,
     canvas: elements.calculationTree,
@@ -56,11 +55,6 @@
     zoomIn: elements.treeZoomIn,
     zoomLevel: elements.treeZoomLevel,
     resetButton: elements.treeResetView,
-    expandMore: elements.treeExpandMore,
-    onExpandMore: () => {
-      treeDepth = Math.min(Store.MAX_TREE_DEPTH, treeDepth + Store.DEFAULT_TREE_DEPTH);
-      renderDetails();
-    },
   });
 
   function restoreState() {
@@ -528,14 +522,13 @@
       maxNodes: Store.MAX_TREE_NODES,
     });
     if (treeController.ensureValue(state.selectedValueId)) {
-      treeDepth = Store.DEFAULT_TREE_DEPTH;
+      treeDepth = Store.MAX_TREE_DEPTH;
       return renderDetails();
     }
     elements.detailsEmpty.hidden = Boolean(details);
     elements.detailsContent.hidden = !details;
     elements.directFormulaList.replaceChildren();
     elements.calculationTree.replaceChildren();
-    treeController.setExpandable(false, false);
     if (!details) return;
 
     elements.selectedValue.textContent = details.value.displayText;
@@ -566,8 +559,6 @@
         elements.calculationTree.appendChild(renderDerivation(derivation));
       });
     }
-    const hasDeferredBranches = Store.treeHasDeferredBranches(details.tree);
-    treeController.setExpandable(hasDeferredBranches, treeDepth >= Store.MAX_TREE_DEPTH);
     requestAnimationFrame(treeController.apply);
   }
 
