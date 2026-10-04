@@ -418,7 +418,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       <div class="definition-sources" aria-label="函数定义可用来源">
         <div><span class="definition-source-label">函数</span><div id="definitionFunctionSources" class="definition-source-list"></div></div>
         <div><span class="definition-source-label">变量</span><div id="definitionParameterSources" class="definition-source-list"></div></div>
-        <div><span class="definition-source-label">数值</span><div id="definitionValueSources" class="definition-source-list"></div></div>
+        <div><span class="definition-source-label">数值栏</span><div id="definitionValueSources" class="definition-source-list"></div></div>
       </div>
       <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
     </section>
@@ -3347,7 +3347,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }
     elements.customDefinitionStatus.textContent = customDefinitionError || (editingFunctionId
       ? "正在编辑函数表达式。函数名和变量固定；把函数、变量或数值拖入空槽即可修改。"
-      : "拖入函数、变量或数值构造表达式；数值会作为固定表达式保存。点击来源后，再点击目标槽也可填入。");
+      : "拖入函数、变量或数值栏里的数值构造表达式；数值会作为固定表达式保存。点击来源后，再点击目标槽也可填入。");
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
   }
 

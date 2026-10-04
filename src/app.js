@@ -393,7 +393,7 @@
     }
     elements.customDefinitionStatus.textContent = customDefinitionError || (editingFunctionId
       ? "正在编辑函数表达式。函数名和变量固定；把函数、变量或数值拖入空槽即可修改。"
-      : "拖入函数、变量或数值构造表达式；数值会作为固定表达式保存。点击来源后，再点击目标槽也可填入。");
+      : "拖入函数、变量或数值栏里的数值构造表达式；数值会作为固定表达式保存。点击来源后，再点击目标槽也可填入。");
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
   }
 
