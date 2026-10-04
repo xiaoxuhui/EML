@@ -55,8 +55,6 @@
       const expandedFormula = `${Composition.renderExpandedBody(parsed.definition.body, bindings, available)} = ${result.displayText}`;
       derivation.expandedFormula = expandedFormula;
       derivation.directFormula = expandedFormula;
-      const reevaluated = Composition.evaluate(parsed.definition, inputs, available);
-      if (reevaluated.ok) derivation.emlTree = reevaluated.emlTree;
     }
     return next;
   }

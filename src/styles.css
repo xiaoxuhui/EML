@@ -263,16 +263,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .tree-value { color: #34434d; }
 .tree-label { font-family: Cambria, "Times New Roman", serif; font-weight: 600; }
 .rewrite-steps { color: var(--muted); font-size: 13px; }
-.composition-tree-derivation { border-left-color: #437f88; }
-.composition-eml-node { min-width: 150px; border: 1px solid #a9cdd1; background: #f7fbfb; padding: 8px; margin: 8px 0; }
-.composition-eml-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-family: Cambria, "Times New Roman", serif; font-weight: 700; }
-.composition-eml-result { color: #27545a; font-weight: 600; overflow-wrap: anywhere; }
-.composition-eml-steps { color: var(--muted); font-size: 12px; margin-top: 4px; }
-.composition-eml-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
-.composition-eml-input { min-width: 0; color: #34434d; font-family: Cambria, "Times New Roman", serif; }
-.composition-eml-label { font-weight: 700; }
-.composition-tree-value { overflow-wrap: anywhere; }
-@media (max-width: 640px) { .composition-eml-inputs { grid-template-columns: 1fr; } }
 
 /* 推导过程：从初始值到当前数值的线性建造顺序 */
 .trace-heading {

@@ -59,9 +59,7 @@
 
       if (derivation) {
         step.operation = derivation.operation || "EML";
-        step.directFormula = derivation.operation === "EML_COMPOSITION" && derivation.emlTree?.type === "eml"
-          ? `EML = ${derivation.emlTree.result}`
-          : derivation.expandedFormula || derivation.directFormula || "";
+        step.directFormula = derivation.expandedFormula || derivation.directFormula || "";
         step.rewriteSteps = Array.isArray(derivation.rewriteSteps) ? derivation.rewriteSteps : [];
         // 先访问输入：后序保证任何一步被记录时，它的输入都已在前
         const inputIds = Array.isArray(derivation.inputValueIds)

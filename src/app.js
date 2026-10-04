@@ -218,7 +218,7 @@
       panel.appendChild(line);
       const direct = document.createElement("div");
       direct.className = "direct-preview";
-      direct.textContent = !evaluation ? "等待全部参数。" : !evaluation.ok ? evaluation.error : evaluation.limitReached ? "化简达到安全上限，当前结果尚不能添加。" : evaluation.emlTree?.type === "eml" ? `EML = ${evaluation.emlTree.result}` : (evaluation.expandedFormula || evaluation.directFormula);
+      direct.textContent = !evaluation ? "等待全部参数。" : !evaluation.ok ? evaluation.error : evaluation.limitReached ? "化简达到安全上限，当前结果尚不能添加。" : (evaluation.expandedFormula || evaluation.directFormula);
       panel.appendChild(direct);
       const remove = document.createElement("button");
       remove.type = "button";
@@ -343,54 +343,7 @@
     container.appendChild(item);
   }
 
-  function renderCompositionNode(node) {
-    if (!node || node.type !== "eml") {
-      const value = document.createElement("span");
-      value.className = "composition-tree-value";
-      value.textContent = node?.label || "未知";
-      return value;
-    }
-    const element = document.createElement("section");
-    element.className = "composition-eml-node";
-    const heading = document.createElement("div");
-    heading.className = "composition-eml-heading";
-    heading.textContent = "EML";
-    const result = document.createElement("span");
-    result.className = "composition-eml-result";
-    result.textContent = `= ${node.result}`;
-    heading.appendChild(result);
-    element.appendChild(heading);
-
-    if (node.rewriteSteps?.length) {
-      const summary = document.createElement("div");
-      summary.className = "composition-eml-steps";
-      summary.textContent = `化简 ${node.rewriteSteps.length} 步`;
-      element.appendChild(summary);
-    }
-
-    const inputs = document.createElement("div");
-    inputs.className = "composition-eml-inputs";
-    ["x", "y"].forEach((name, index) => {
-      const branch = document.createElement("div");
-      branch.className = "composition-eml-input";
-      const label = document.createElement("span");
-      label.className = "composition-eml-label";
-      label.textContent = `${name}: `;
-      branch.appendChild(label);
-      branch.appendChild(renderCompositionNode(node.inputs?.[index]));
-      inputs.appendChild(branch);
-    });
-    element.appendChild(inputs);
-    return element;
-  }
-
   function renderDerivation(derivation) {
-    if (derivation.emlTree?.type === "eml") {
-      const composition = document.createElement("div");
-      composition.className = "tree-derivation composition-tree-derivation";
-      composition.appendChild(renderCompositionNode(derivation.emlTree));
-      return composition;
-    }
     const details = document.createElement("details");
     details.className = "tree-derivation";
     details.open = true;

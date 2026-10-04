@@ -128,5 +128,4 @@ test("旧组合函数记录迁移为展开的 EML 公式", () => {
   const migrated = restored.state.derivations[derivation.id];
   assert.equal(migrated.directFormula, "EML(1, 1) = e");
   assert.equal(migrated.expandedFormula, "EML(1, 1) = e");
-  assert.equal(migrated.emlTree.type, "eml");
 });
