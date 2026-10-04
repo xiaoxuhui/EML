@@ -478,6 +478,43 @@ test("非零判断识别虚部且不消去 ln(0)", () => {
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"), false);
 });
 
+test("回归：纯虚数系数相减后仍可消去 e^(ln(...))", () => {
+  const argument = Expr.sub(Expr.I, Expr.div(Expr.I, Expr.integer(2)));
+  assert.equal(Rules.isProvablyNonZero(argument), true);
+
+  const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(argument)));
+  assert.equal(Expr.render(result.expression), "i / 2");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
+});
+
+test("回归：多层纯虚数嵌套不会阻断外层 e^(ln(...)) 化简", () => {
+  let expression = Expr.pow(Expr.E, Expr.ln(Expr.sub(Expr.I, Expr.div(Expr.I, Expr.integer(2)))));
+  for (let index = 0; index < 12; index += 1) {
+    expression = Expr.pow(Expr.E, Expr.ln(Expr.sub(Expr.I, Expr.sub(expression, Expr.I))));
+  }
+
+  const result = Rules.simplify(expression);
+  assert.equal(result.limitReached, undefined);
+  assert.equal(Expr.render(result.expression).includes("e^(ln"), false);
+  assert.ok(result.steps.filter((step) => step.ruleId === "EXP_LN_FORMAL").length >= 13);
+});
+
+test("多层纯虚数加减可作为指数对数合并规则的非零参数", () => {
+  const nestedImaginary = Expr.sub(
+    Expr.sub(Expr.I, Expr.neg(Expr.div(Expr.I, Expr.integer(2)))),
+    Expr.add(Expr.I, Expr.I)
+  );
+  assert.equal(Rules.isProvablyNonZero(nestedImaginary), true);
+
+  const expression = Expr.pow(
+    Expr.E,
+    Expr.add(Expr.ln(nestedImaginary), Expr.ln(Expr.div(Expr.I, Expr.integer(2))))
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "1 / 4");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_ADD_LN"));
+});
+
 test("回归：e^(-ln(4)) 化简为 1 / 4", () => {
   const expression = Expr.pow(Expr.E, Expr.neg(Expr.ln(Expr.integer(4))));
   const result = Rules.simplify(expression);
@@ -519,6 +556,15 @@ test("形式化 e^ln 规则仍阻止明确的零参数", () => {
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"), false);
 });
 
+test("形式化 e^ln 规则不要求证明嵌套复数参数非零", () => {
+  const argument = Expr.sub(Expr.I, Expr.ln(Expr.div(Expr.I, Expr.integer(2))));
+  assert.equal(Rules.isProvablyNonZero(argument), false);
+
+  const result = Rules.simplify(Expr.pow(Expr.E, Expr.ln(argument)));
+  assert.equal(Expr.render(result.expression), "i - ln(i / 2)");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
+});
+
 test("回归：ln(-i) - ln(1 / (iπ)) 化简为 ln(-i) + ln(iπ)", () => {
   const ipi = Expr.mul(Expr.I, Expr.PI);
   const expression = Expr.sub(
@@ -546,8 +592,7 @@ test("回归：e^(ln(-i) + ln(iπ)) 化简为 π", () => {
   const result = Rules.simplify(Expr.pow(Expr.E, exponent));
   assert.equal(Expr.render(result.expression), "π");
   assert.ok(result.steps.some((step) => step.ruleId === "EXP_ADD_LN"));
-  assert.ok(result.steps.some((step) => step.ruleId === "MUL_NEG_FACTOR"));
-  assert.ok(result.steps.some((step) => step.ruleId === "I_TIMES_I_FACTOR"));
+  assert.ok(result.steps.some((step) => step.ruleId === "MUL_IMAGINARY_FACTORS"));
   assert.ok(result.steps.some((step) => step.ruleId === "NEG_DOUBLE"));
 });
 
@@ -605,6 +650,47 @@ test("回归：2 / -i 化简为 2i", () => {
   const result = Rules.simplify(Expr.div(Expr.integer(2), Expr.neg(Expr.I)));
   assert.equal(Expr.render(result.expression), "2i");
   assert.ok(result.steps.some((step) => step.ruleId === "DIV_NEG_I"));
+});
+
+test("纯虚数系数归一化让嵌套 i 乘 i 和减负数可继续化简", () => {
+  const product = Rules.simplify(Expr.mul(Expr.div(Expr.I, Expr.integer(2)), Expr.I));
+  assert.equal(Expr.render(product.expression), "-1 / 2");
+  assert.ok(product.steps.some((step) => step.ruleId === "I_TIMES_DIV"));
+  assert.ok(product.steps.some((step) => step.ruleId === "I_SQUARED"));
+
+  const difference = Rules.simplify(
+    Expr.sub(Expr.mul(Expr.I, Expr.PI), Expr.neg(Expr.div(Expr.I, Expr.integer(2))))
+  );
+  assert.equal(Expr.render(difference.expression), "i × (π + 1 / 2)");
+  assert.ok(difference.steps.some((step) => step.ruleId === "SUB_NEGATIVE_FRACTION"));
+  assert.ok(difference.steps.some((step) => step.ruleId === "ADD_IMAGINARY_COEFFICIENT"));
+});
+
+test("整数分数乘法继续化简双重负号", () => {
+  const expression = Expr.neg(Expr.mul(
+    Expr.div(Expr.integer(-1), Expr.integer(2)),
+    Expr.div(Expr.ONE, Expr.integer(2))
+  ));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "1 / 4");
+  assert.ok(result.steps.some((step) => step.ruleId === "INTEGER_FRACTION_MUL"));
+});
+
+test("整数分数加减与约分支持负分数", () => {
+  const expression = Expr.sub(
+    Expr.div(Expr.ONE, Expr.integer(4)),
+    Expr.div(Expr.integer(-1), Expr.integer(4))
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "1 / 2");
+  assert.ok(result.steps.some((step) => step.ruleId === "INTEGER_FRACTION_SUB"));
+  assert.ok(result.steps.some((step) => step.ruleId === "INTEGER_FRACTION_REDUCE"));
+});
+
+test("纯虚数系数规则不改写普通实数加法", () => {
+  const result = Rules.simplify(Expr.add(Expr.PI, Expr.integer(2)));
+  assert.equal(Expr.render(result.expression), "π + 2");
+  assert.equal(result.steps.some((step) => step.ruleId === "ADD_IMAGINARY_COEFFICIENT"), false);
 });
 
 test("除以 i 时保留正确的负号", () => {
@@ -688,6 +774,26 @@ test("回归：(a - b) - (a - c) 化为 c - b", () => {
   const result = Rules.simplify(Expr.sub(Expr.sub(Expr.E, Expr.ONE), Expr.sub(Expr.E, Expr.integer(2))));
   assert.equal(Expr.render(result.expression), "1");
   assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_SAME_LEFT"));
+});
+
+test("回归：(a + b) - (a - c) 化为 b + c", () => {
+  const expression = Expr.sub(
+    Expr.add(Expr.I, Expr.ln(Expr.integer(2))),
+    Expr.sub(Expr.I, Expr.ln(Expr.integer(3)))
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "ln(2) + ln(3)");
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_ADD_SUB_SAME_LEFT"));
+});
+
+test("回归：(a - b) - (a + c) 化为 -(b + c)", () => {
+  const expression = Expr.sub(
+    Expr.sub(Expr.I, Expr.div(Expr.ONE, Expr.integer(2))),
+    Expr.add(Expr.I, Expr.ln(Expr.integer(2)))
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "-(1 / 2 + ln(2))");
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_ADD_SAME_LEFT"));
 });
 
 test("回归：a - (b + c) 去括号后可继续合并整数", () => {

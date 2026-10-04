@@ -125,7 +125,11 @@
       if (isNegativeIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_NEG_IDENTITY" };
       if (isHalfIpi(expression.exponent)) return { expression: I, ruleId: "EULER_HALF_IDENTITY" };
       if (isNegativeHalfIpi(expression.exponent)) return { expression: neg(I), ruleId: "EULER_NEG_HALF_IDENTITY" };
-      if (expression.exponent.type === TYPES.LN && isProvablyNonZero(expression.exponent.argument)) {
+      // EML uses this as a formal inverse rule. At this point the argument has
+      // already been simplified bottom-up, so an actually recognized zero is
+      // represented by the integer 0. Requiring a complete nonzero proof here
+      // incorrectly blocks nested complex expressions such as i - ln(i / 2).
+      if (expression.exponent.type === TYPES.LN && !isInteger(expression.exponent.argument, 0)) {
         return { expression: expression.exponent.argument, ruleId: "EXP_LN_FORMAL" };
       }
       if (

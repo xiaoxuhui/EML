@@ -113,28 +113,44 @@
   }
 
   function isProvablyPureImaginaryNonZero(expression) {
+    const coefficient = imaginaryCoefficient(expression);
+    return Boolean(coefficient && isProvablyNonZero(coefficient));
+  }
+
+  function imaginaryCoefficient(expression) {
     switch (expression.type) {
       case TYPES.CONSTANT:
-        return expression.name === "i";
-      case TYPES.NEG:
-        return isProvablyPureImaginaryNonZero(expression.child);
+        return expression.name === "i" ? Expr.ONE : null;
+      case TYPES.NEG: {
+        const coefficient = imaginaryCoefficient(expression.child);
+        return coefficient ? Expr.neg(coefficient) : null;
+      }
       case TYPES.MUL:
-        return (
-          (isProvablyPureImaginaryNonZero(expression.left) &&
-            isProvablyReal(expression.right) &&
-            isProvablyNonZero(expression.right)) ||
-          (isProvablyPureImaginaryNonZero(expression.right) &&
-            isProvablyReal(expression.left) &&
-            isProvablyNonZero(expression.left))
-        );
-      case TYPES.DIV:
-        return (
-          isProvablyPureImaginaryNonZero(expression.numerator) &&
-          isProvablyReal(expression.denominator) &&
-          isProvablyNonZero(expression.denominator)
-        );
+        if (isProvablyReal(expression.right)) {
+          const coefficient = imaginaryCoefficient(expression.left);
+          return coefficient ? Expr.mul(coefficient, expression.right) : null;
+        }
+        if (isProvablyReal(expression.left)) {
+          const coefficient = imaginaryCoefficient(expression.right);
+          return coefficient ? Expr.mul(expression.left, coefficient) : null;
+        }
+        return null;
+      case TYPES.DIV: {
+        if (!isProvablyReal(expression.denominator)) return null;
+        const coefficient = imaginaryCoefficient(expression.numerator);
+        return coefficient ? Expr.div(coefficient, expression.denominator) : null;
+      }
+      case TYPES.ADD:
+      case TYPES.SUB: {
+        const leftCoefficient = imaginaryCoefficient(expression.left);
+        const rightCoefficient = imaginaryCoefficient(expression.right);
+        if (!leftCoefficient || !rightCoefficient) return null;
+        return expression.type === TYPES.ADD
+          ? Expr.add(leftCoefficient, rightCoefficient)
+          : Expr.sub(leftCoefficient, rightCoefficient);
+      }
       default:
-        return false;
+        return null;
     }
   }
 
@@ -156,6 +172,14 @@
         return isProvablyNonZero(expression.argument) && isProvablyNotOne(expression.argument);
       case TYPES.ADD:
       case TYPES.SUB: {
+        const leftCoefficient = imaginaryCoefficient(expression.left);
+        const rightCoefficient = imaginaryCoefficient(expression.right);
+        if (leftCoefficient && rightCoefficient) {
+          const combined = expression.type === TYPES.ADD
+            ? Expr.add(leftCoefficient, rightCoefficient)
+            : Expr.sub(leftCoefficient, rightCoefficient);
+          if (isProvablyNonZero(combined)) return true;
+        }
         const bounds = realBounds(expression);
         return Boolean(
           (isProvablyPureImaginaryNonZero(expression.left) && isProvablyReal(expression.right)) ||
@@ -177,5 +201,6 @@
     isProvablyNotOne,
     isProvablyNonZero,
     isProvablyPureImaginaryNonZero,
+    imaginaryCoefficient,
   };
 });

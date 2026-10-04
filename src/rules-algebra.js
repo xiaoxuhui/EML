@@ -11,7 +11,7 @@
   "use strict";
 
   const { TYPES, ONE, ZERO, I, integer, neg, add, sub, mul, isSame, isInteger, isConstant } = Expr;
-  const { isProvablyNonZero } = Properties;
+  const { isProvablyNonZero, imaginaryCoefficient } = Properties;
 
   const rules = [
     { id: "NEG_INTEGER", label: "负整数化简" },
@@ -24,20 +24,26 @@
     { id: "ADD_ZERO", label: "a + 0 = a" },
     { id: "ADD_INVERSE", label: "a + (-a) = 0" },
     { id: "ADD_SUB_CANCEL", label: "(a - b) + b = a" },
+    { id: "ADD_IMAGINARY_COEFFICIENT", label: "ia + ib = i(a + b)" },
     { id: "SUB_ZERO", label: "a - 0 = a" },
     { id: "SUB_SELF", label: "a - a = 0" },
     { id: "SUB_NESTED_LEFT", label: "a - (a - b) = b" },
     { id: "SUB_NESTED_RIGHT", label: "(a - b) - a = -b" },
     { id: "SUB_NESTED_SAME_LEFT", label: "(a - b) - (a - c) = c - b" },
+    { id: "SUB_NESTED_ADD_SAME_LEFT", label: "(a - b) - (a + c) = -(b + c)" },
     { id: "SUB_NEGATIVE", label: "a - (-b) = a + b" },
+    { id: "SUB_NEGATIVE_FRACTION", label: "a - (-b / c) = a + b / c" },
     { id: "SUB_ADDED_LEFT", label: "a - (a + b) = -b" },
     { id: "SUB_ADDED_CANCEL", label: "(a + b) - a = b" },
+    { id: "SUB_ADD_SUB_SAME_LEFT", label: "(a + b) - (a - c) = b + c" },
+    { id: "SUB_IMAGINARY_COEFFICIENT", label: "ia - ib = i(a - b)" },
     { id: "SUB_NESTED_FOLD", label: "a - (b - c) 折叠为可合并整数的形式" },
     { id: "SUB_SUM_FOLD", label: "a - (b + c) 折叠为可合并整数的形式" },
     { id: "MUL_ONE", label: "a × 1 = a" },
     { id: "MUL_ZERO", label: "a × 0 = 0" },
     { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
     { id: "I_SQUARED", label: "i × i = -1" },
+    { id: "MUL_IMAGINARY_FACTORS", label: "(ia)(ib) = -ab" },
     { id: "MUL_NEG_FACTOR", label: "(-a)b = -(ab)" },
     { id: "I_TIMES_I_FACTOR", label: "i(ia) = -a" },
     { id: "DIV_ONE", label: "a / 1 = a" },
@@ -45,7 +51,56 @@
     { id: "DIV_I", label: "a / i = -ai" },
     { id: "DIV_NEG_I", label: "a / (-i) = ai" },
     { id: "INTEGER_DIV", label: "整除运算" },
+    { id: "INTEGER_FRACTION_ADD", label: "整数与分数加法" },
+    { id: "INTEGER_FRACTION_SUB", label: "整数与分数减法" },
+    { id: "INTEGER_FRACTION_MUL", label: "整数分数相乘" },
+    { id: "INTEGER_FRACTION_REDUCE", label: "整数分数约分" },
+    { id: "I_TIMES_DIV", label: "i × (a / b) = ia / b" },
   ];
+
+  function combineIntegerAndFraction(integerExpression, fraction, sign) {
+    if (
+      integerExpression.type !== TYPES.INTEGER || fraction.type !== TYPES.DIV ||
+      fraction.numerator.type !== TYPES.INTEGER || fraction.denominator.type !== TYPES.INTEGER ||
+      fraction.denominator.value === 0
+    ) return null;
+    return Expr.div(
+      integer(integerExpression.value * fraction.denominator.value + sign * fraction.numerator.value),
+      fraction.denominator
+    );
+  }
+
+  function combineFractionAndInteger(fraction, integerExpression) {
+    if (
+      fraction.type !== TYPES.DIV || integerExpression.type !== TYPES.INTEGER ||
+      fraction.numerator.type !== TYPES.INTEGER || fraction.denominator.type !== TYPES.INTEGER ||
+      fraction.denominator.value === 0
+    ) return null;
+    return Expr.div(
+      integer(fraction.numerator.value - integerExpression.value * fraction.denominator.value),
+      fraction.denominator
+    );
+  }
+
+  function combineFractions(left, right, sign) {
+    if (
+      left.type !== TYPES.DIV || right.type !== TYPES.DIV ||
+      left.numerator.type !== TYPES.INTEGER || left.denominator.type !== TYPES.INTEGER ||
+      right.numerator.type !== TYPES.INTEGER || right.denominator.type !== TYPES.INTEGER ||
+      left.denominator.value === 0 || right.denominator.value === 0
+    ) return null;
+    return Expr.div(
+      integer(left.numerator.value * right.denominator.value + sign * right.numerator.value * left.denominator.value),
+      integer(left.denominator.value * right.denominator.value)
+    );
+  }
+
+  function greatestCommonDivisor(left, right) {
+    let a = Math.abs(left);
+    let b = Math.abs(right);
+    while (b !== 0) [a, b] = [b, a % b];
+    return a || 1;
+  }
 
   function rewrite(expression) {
     if (expression.type === TYPES.NEG && expression.child.type === TYPES.NEG) {
@@ -74,6 +129,11 @@
       if (expression.left.type === TYPES.INTEGER && expression.right.type === TYPES.INTEGER) {
         return { expression: integer(expression.left.value + expression.right.value), ruleId: "INTEGER_ADD" };
       }
+      const fractionSum = combineFractions(expression.left, expression.right, 1);
+      if (fractionSum) return { expression: fractionSum, ruleId: "INTEGER_FRACTION_ADD" };
+      const integerFraction = combineIntegerAndFraction(expression.left, expression.right, 1) ||
+        combineIntegerAndFraction(expression.right, expression.left, 1);
+      if (integerFraction) return { expression: integerFraction, ruleId: "INTEGER_FRACTION_ADD" };
       if (isInteger(expression.left, 0)) return { expression: expression.right, ruleId: "ADD_ZERO" };
       if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "ADD_ZERO" };
       if (expression.left.type === TYPES.NEG && isSame(expression.left.child, expression.right)) {
@@ -88,12 +148,25 @@
       if (expression.right.type === TYPES.SUB && isSame(expression.left, expression.right.right)) {
         return { expression: expression.right.left, ruleId: "ADD_SUB_CANCEL" };
       }
+      const leftCoefficient = imaginaryCoefficient(expression.left);
+      const rightCoefficient = imaginaryCoefficient(expression.right);
+      if (leftCoefficient && rightCoefficient) {
+        return {
+          expression: mul(I, add(leftCoefficient, rightCoefficient)),
+          ruleId: "ADD_IMAGINARY_COEFFICIENT",
+        };
+      }
     }
 
     if (expression.type === TYPES.SUB) {
       if (expression.left.type === TYPES.INTEGER && expression.right.type === TYPES.INTEGER) {
         return { expression: integer(expression.left.value - expression.right.value), ruleId: "INTEGER_SUB" };
       }
+      const fractionDifference = combineFractions(expression.left, expression.right, -1);
+      if (fractionDifference) return { expression: fractionDifference, ruleId: "INTEGER_FRACTION_SUB" };
+      const integerFraction = combineIntegerAndFraction(expression.left, expression.right, -1) ||
+        combineFractionAndInteger(expression.left, expression.right);
+      if (integerFraction) return { expression: integerFraction, ruleId: "INTEGER_FRACTION_SUB" };
       if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "SUB_ZERO" };
       if (isSame(expression.left, expression.right)) return { expression: ZERO, ruleId: "SUB_SELF" };
       if (expression.right.type === TYPES.SUB && isSame(expression.left, expression.right.left)) {
@@ -104,6 +177,26 @@
       }
       if (expression.right.type === TYPES.NEG) {
         return { expression: add(expression.left, expression.right.child), ruleId: "SUB_NEGATIVE" };
+      }
+      if (expression.right.type === TYPES.DIV && expression.right.numerator.type === TYPES.NEG) {
+        return {
+          expression: add(expression.left, Expr.div(expression.right.numerator.child, expression.right.denominator)),
+          ruleId: "SUB_NEGATIVE_FRACTION",
+        };
+      }
+      if (expression.right.type === TYPES.DIV && isInteger(expression.right.numerator) && expression.right.numerator.value < 0) {
+        return {
+          expression: add(expression.left, Expr.div(integer(-expression.right.numerator.value), expression.right.denominator)),
+          ruleId: "SUB_NEGATIVE_FRACTION",
+        };
+      }
+      const leftCoefficient = imaginaryCoefficient(expression.left);
+      const rightCoefficient = imaginaryCoefficient(expression.right);
+      if (leftCoefficient && rightCoefficient) {
+        return {
+          expression: mul(I, sub(leftCoefficient, rightCoefficient)),
+          ruleId: "SUB_IMAGINARY_COEFFICIENT",
+        };
       }
       if (expression.right.type === TYPES.ADD) {
         if (isSame(expression.left, expression.right.left)) {
@@ -121,6 +214,22 @@
           return { expression: expression.left.left, ruleId: "SUB_ADDED_CANCEL" };
         }
       }
+      if (
+        expression.left.type === TYPES.ADD && expression.right.type === TYPES.SUB
+      ) {
+        if (isSame(expression.left.left, expression.right.left)) {
+          return {
+            expression: add(expression.left.right, expression.right.right),
+            ruleId: "SUB_ADD_SUB_SAME_LEFT",
+          };
+        }
+        if (isSame(expression.left.right, expression.right.left)) {
+          return {
+            expression: add(expression.left.left, expression.right.right),
+            ruleId: "SUB_ADD_SUB_SAME_LEFT",
+          };
+        }
+      }
       // (a - b) - (a - c) = c - b
       if (
         expression.left.type === TYPES.SUB && expression.right.type === TYPES.SUB &&
@@ -129,6 +238,15 @@
         return {
           expression: sub(expression.right.right, expression.left.right),
           ruleId: "SUB_NESTED_SAME_LEFT",
+        };
+      }
+      if (
+        expression.left.type === TYPES.SUB && expression.right.type === TYPES.ADD &&
+        isSame(expression.left.left, expression.right.left)
+      ) {
+        return {
+          expression: neg(add(expression.left.right, expression.right.right)),
+          ruleId: "SUB_NESTED_ADD_SAME_LEFT",
         };
       }
       // a - (b - c) = a - b + c
@@ -162,11 +280,45 @@
       if (expression.left.type === TYPES.INTEGER && expression.right.type === TYPES.INTEGER) {
         return { expression: integer(expression.left.value * expression.right.value), ruleId: "INTEGER_MUL" };
       }
+      if (
+        expression.left.type === TYPES.DIV && expression.right.type === TYPES.DIV &&
+        expression.left.numerator.type === TYPES.INTEGER && expression.left.denominator.type === TYPES.INTEGER &&
+        expression.right.numerator.type === TYPES.INTEGER && expression.right.denominator.type === TYPES.INTEGER &&
+        expression.left.denominator.value !== 0 && expression.right.denominator.value !== 0
+      ) {
+        return {
+          expression: Expr.div(
+            integer(expression.left.numerator.value * expression.right.numerator.value),
+            integer(expression.left.denominator.value * expression.right.denominator.value)
+          ),
+          ruleId: "INTEGER_FRACTION_MUL",
+        };
+      }
       if (isInteger(expression.left, 0) || isInteger(expression.right, 0)) {
         return { expression: ZERO, ruleId: "MUL_ZERO" };
       }
       if (isConstant(expression.left, "i") && isConstant(expression.right, "i")) {
         return { expression: integer(-1), ruleId: "I_SQUARED" };
+      }
+      if (isConstant(expression.left, "i") && expression.right.type === TYPES.DIV) {
+        return {
+          expression: Expr.div(mul(I, expression.right.numerator), expression.right.denominator),
+          ruleId: "I_TIMES_DIV",
+        };
+      }
+      if (isConstant(expression.right, "i") && expression.left.type === TYPES.DIV) {
+        return {
+          expression: Expr.div(mul(expression.left.numerator, I), expression.left.denominator),
+          ruleId: "I_TIMES_DIV",
+        };
+      }
+      const leftCoefficient = imaginaryCoefficient(expression.left);
+      const rightCoefficient = imaginaryCoefficient(expression.right);
+      if (leftCoefficient && rightCoefficient) {
+        return {
+          expression: neg(mul(leftCoefficient, rightCoefficient)),
+          ruleId: "MUL_IMAGINARY_FACTORS",
+        };
       }
       if (expression.left.type === TYPES.NEG) {
         return { expression: neg(mul(expression.left.child, expression.right)), ruleId: "MUL_NEG_FACTOR" };
@@ -204,6 +356,18 @@
         expression.denominator.value !== 0 && expression.numerator.value % expression.denominator.value === 0
       ) {
         return { expression: integer(expression.numerator.value / expression.denominator.value), ruleId: "INTEGER_DIV" };
+      }
+      if (expression.numerator.type === TYPES.INTEGER && expression.denominator.type === TYPES.INTEGER && expression.denominator.value !== 0) {
+        const sign = expression.denominator.value < 0 ? -1 : 1;
+        const numerator = expression.numerator.value * sign;
+        const denominator = expression.denominator.value * sign;
+        const divisor = greatestCommonDivisor(numerator, denominator);
+        if (divisor > 1 || sign < 0) {
+          return {
+            expression: Expr.div(integer(numerator / divisor), integer(denominator / divisor)),
+            ruleId: "INTEGER_FRACTION_REDUCE",
+          };
+        }
       }
     }
     return null;
