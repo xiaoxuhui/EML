@@ -378,7 +378,9 @@
       const value = state.values[currentValueId];
       if (!value) return { type: "missing", valueId: currentValueId };
       if (path.has(currentValueId)) return { type: "cycle", valueId: currentValueId, label: value.displayText };
-      if (expandedValueIds.has(currentValueId)) return { type: "reference", valueId: currentValueId, label: value.displayText };
+      if (expandedValueIds.has(currentValueId)) {
+        return { type: "reference", valueId: currentValueId, label: value.displayText, initial: currentValueId === initialValueId };
+      }
       if (budget.count >= maxNodes) {
         return { type: "deferred", valueId: currentValueId, label: value.displayText, reason: "node-limit" };
       }

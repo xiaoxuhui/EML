@@ -508,7 +508,7 @@
     if (node.type === "cycle") {
       item.append("（检测到循环，已停止展开）");
     } else if (node.type === "reference") {
-      item.append("（已在前处展开）");
+      item.append(node.initial ? "（初始值）" : "（已在前处展开）");
     } else if (node.type === "deferred") {
       item.append(node.reason === "node-limit" ? "（已达到节点显示上限）" : "（还有更早的来源）");
     } else if (node.derivations && node.derivations.length) {
@@ -528,7 +528,7 @@
       if (source?.type === "cycle") {
         value.append("（检测到循环，已停止展开）");
       } else if (source?.type === "reference") {
-        value.append("（已在前处展开）");
+        value.append(source.initial ? "（初始值）" : "（已在前处展开）");
       } else if (source?.type === "deferred") {
         value.append("（来源已折叠）");
       } else if (source?.initial) {
