@@ -33,7 +33,7 @@
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "LN_I", label: "ln(i) = iπ / 2（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
-    { id: "LN_EXP_QUOTIENT", label: "ln(e^a / b) = a - ln(b)（a 为实数，b > 0）" },
+    { id: "LN_EXP_QUOTIENT_FORMAL", label: "ln(e^a / b) = a - ln(b)（b ≠ 0，形式化规则）" },
     { id: "LN_REAL_EXP_PRODUCT", label: "ln(e^a × b) = a + ln(b)（a 为实数，b ≠ 0）" },
     { id: "LN_RECIPROCAL", label: "ln(1 / a) = -ln(a)（a ≠ 0，形式化规则）" },
     { id: "EULER_SINE", label: "(e^(ia) - e^(-ia)) / (2i) = sin(a)" },
@@ -190,12 +190,11 @@
       if (
         expression.argument.type === TYPES.DIV && expression.argument.numerator.type === TYPES.POW &&
         isConstant(expression.argument.numerator.base, "e") &&
-        isProvablyReal(expression.argument.numerator.exponent) &&
-        isProvablyPositive(expression.argument.denominator)
+        isProvablyNonZero(expression.argument.denominator)
       ) {
         return {
           expression: sub(expression.argument.numerator.exponent, Expr.ln(expression.argument.denominator)),
-          ruleId: "LN_EXP_QUOTIENT",
+          ruleId: "LN_EXP_QUOTIENT_FORMAL",
         };
       }
       if (

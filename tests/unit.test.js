@@ -418,7 +418,7 @@ test("回归：e - ln(e^e / 2) 化简为 ln(2)", () => {
   const y = Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(2));
   const result = evaluate(Expr.ONE, y);
   assert.equal(result.displayText, "ln(2)");
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_EXP_QUOTIENT_FORMAL"));
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_NESTED_LEFT"));
 });
 
@@ -440,14 +440,17 @@ test("乘积对数规则不展开复指数或零因子", () => {
   assert.equal(zeroResult.steps.some((step) => step.ruleId === "LN_REAL_EXP_PRODUCT"), false);
 });
 
-test("指数商对数规则仅在分母为正实数时展开（避免 2πi 分支错误）", () => {
+test("指数商对数规则对非零分母使用形式化展开", () => {
   const positive = Rules.simplify(Expr.ln(Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(2))));
   assert.equal(Expr.render(positive.expression), "e - ln(2)");
-  assert.ok(positive.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"));
+  assert.ok(positive.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT_FORMAL"));
 
   const negative = Rules.simplify(Expr.ln(Expr.div(Expr.pow(Expr.E, Expr.E), Expr.integer(-2))));
-  assert.equal(negative.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT"), false);
-  assert.equal(Expr.render(negative.expression), "ln(e^(e) / -2)");
+  assert.equal(Expr.render(negative.expression), "e - ln(-2)");
+
+  const complex = Rules.simplify(Expr.ln(Expr.div(Expr.pow(Expr.E, Expr.E), Expr.mul(Expr.I, Expr.PI))));
+  assert.equal(Expr.render(complex.expression), "e - ln(iπ)");
+  assert.ok(complex.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT_FORMAL"));
 });
 
 test("指数商对数规则不展开零分母", () => {
