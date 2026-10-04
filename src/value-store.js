@@ -372,6 +372,20 @@
 
       const nextPath = new Set(path);
       nextPath.add(currentValueId);
+
+      function attachCompositionSources(node, parameterValueIds) {
+        if (!node || typeof node !== "object") return node;
+        if (node.type === "value") {
+          const sourceId = parameterValueIds.get(node.parameterName);
+          return sourceId ? { ...node, source: buildNode(sourceId, nextPath, depth + 1) } : node;
+        }
+        if (node.type !== "eml") return node;
+        return {
+          ...node,
+          inputs: (node.inputs || []).map((input) => attachCompositionSources(input, parameterValueIds)),
+        };
+      }
+
       return {
         type: "value",
         valueId: currentValueId,
@@ -390,7 +404,9 @@
             type: "derivation",
             derivationId: derivation.id,
             directFormula: derivation.expandedFormula || derivation.directFormula,
-            emlTree: derivation.emlTree,
+            emlTree: derivation.emlTree
+              ? attachCompositionSources(derivation.emlTree, new Map(inputNames.map((name, index) => [name, inputIds[index]])))
+              : undefined,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };

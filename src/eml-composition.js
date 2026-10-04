@@ -187,7 +187,7 @@
     function evaluateNode(node) {
       if (node.type === "parameter") {
         const expression = inputs.get(node.name);
-        return { ok: true, expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: Expr.render(expression) } };
+        return { ok: true, expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: Expr.render(expression), parameterName: node.name } };
       }
       if (node.type === "constant") {
         return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: node.displayText } };

@@ -1750,7 +1750,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     function evaluateNode(node) {
       if (node.type === "parameter") {
         const expression = inputs.get(node.name);
-        return { ok: true, expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: Expr.render(expression) } };
+        return { ok: true, expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: Expr.render(expression), parameterName: node.name } };
       }
       if (node.type === "constant") {
         return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: node.displayText } };
@@ -2214,6 +2214,20 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
       const nextPath = new Set(path);
       nextPath.add(currentValueId);
+
+      function attachCompositionSources(node, parameterValueIds) {
+        if (!node || typeof node !== "object") return node;
+        if (node.type === "value") {
+          const sourceId = parameterValueIds.get(node.parameterName);
+          return sourceId ? { ...node, source: buildNode(sourceId, nextPath, depth + 1) } : node;
+        }
+        if (node.type !== "eml") return node;
+        return {
+          ...node,
+          inputs: (node.inputs || []).map((input) => attachCompositionSources(input, parameterValueIds)),
+        };
+      }
+
       return {
         type: "value",
         valueId: currentValueId,
@@ -2232,7 +2246,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
             type: "derivation",
             derivationId: derivation.id,
             directFormula: derivation.expandedFormula || derivation.directFormula,
-            emlTree: derivation.emlTree,
+            emlTree: derivation.emlTree
+              ? attachCompositionSources(derivation.emlTree, new Map(inputNames.map((name, index) => [name, inputIds[index]])))
+              : undefined,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };
@@ -3183,9 +3199,21 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   function renderExpandedEml(node) {
     if (!node || node.type !== "eml") {
-      const value = document.createElement("span");
+      const value = document.createElement("div");
       value.className = "expanded-eml-value";
-      value.textContent = node?.label || "未知";
+      const label = document.createElement("span");
+      label.textContent = node?.label || "未知";
+      value.appendChild(label);
+      const source = node?.source;
+      if (source?.type === "cycle") {
+        value.append("（检测到循环，已停止展开）");
+      } else if (source?.type === "deferred") {
+        value.append("（来源已折叠）");
+      } else if (source?.initial) {
+        value.append("（初始值）");
+      } else if (source?.derivations?.length) {
+        source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation)));
+      }
       return value;
     }
     const element = document.createElement("section");

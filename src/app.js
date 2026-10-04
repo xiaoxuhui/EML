@@ -345,9 +345,21 @@
 
   function renderExpandedEml(node) {
     if (!node || node.type !== "eml") {
-      const value = document.createElement("span");
+      const value = document.createElement("div");
       value.className = "expanded-eml-value";
-      value.textContent = node?.label || "未知";
+      const label = document.createElement("span");
+      label.textContent = node?.label || "未知";
+      value.appendChild(label);
+      const source = node?.source;
+      if (source?.type === "cycle") {
+        value.append("（检测到循环，已停止展开）");
+      } else if (source?.type === "deferred") {
+        value.append("（来源已折叠）");
+      } else if (source?.initial) {
+        value.append("（初始值）");
+      } else if (source?.derivations?.length) {
+        source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation)));
+      }
       return value;
     }
     const element = document.createElement("section");

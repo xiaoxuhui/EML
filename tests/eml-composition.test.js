@@ -56,6 +56,7 @@ test("UCF06-UCF08 组合函数结果加入数值栏并保护全部输入", () =>
   assert.equal(Store.isReferenced(added.state, Store.initialValueId), true);
   const tree = Store.getDetails(added.state, added.resultValueId).tree;
   assert.equal(tree.derivations[0].emlTree.type, "eml");
+  assert.equal(tree.derivations[0].emlTree.inputs[0].inputs[0].source.initial, true);
   assert.deepEqual(Store.getDetails(added.state, added.resultValueId).directFormulas, ["EML(EML(1, 1), 1) = e^(e)"]);
   assert.equal(tree.derivations[0].inputs.length, 3);
   assert.deepEqual(tree.derivations[0].inputs.map((input) => input.name), ["x", "y", "z"]);
