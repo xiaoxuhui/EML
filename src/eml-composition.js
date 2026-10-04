@@ -129,6 +129,19 @@
     return new Map((Array.isArray(definitions) ? definitions : []).map((item) => [item.name, item]));
   }
 
+  function renderExpandedBody(node, bindings, definitions, callStack = new Set()) {
+    if (node.type === "parameter") return bindings.get(node.name) || node.name;
+    if (node.type === "constant") return node.displayText;
+    if (node.type === "eml") {
+      return `EML(${renderExpandedBody(node.left, bindings, definitions, callStack)}, ${renderExpandedBody(node.right, bindings, definitions, callStack)})`;
+    }
+    const target = definitions.get(node.name);
+    if (!target || callStack.has(node.name)) return `${node.name}(${node.arguments.map((argument) => renderExpandedBody(argument, bindings, definitions, callStack)).join(", ")})`;
+    const argumentTexts = node.arguments.map((argument) => renderExpandedBody(argument, bindings, definitions, callStack));
+    const targetBindings = new Map(target.parameterNames.map((name, index) => [name, argumentTexts[index]]));
+    return renderExpandedBody(target.body, targetBindings, definitions, new Set([...callStack, node.name]));
+  }
+
   function validateDefinitionCalls(definition, definitions) {
     const available = definitionMap(definitions);
     let error = "";
@@ -210,6 +223,13 @@
     if (!calculated.ok) return calculated;
     const displayText = Expr.render(calculated.expression);
     const inputText = inputExpressions.map((expression) => Expr.render(expression)).join(", ");
+    const callText = `${definition.name}(${inputText})`;
+    const expandedBody = renderExpandedBody(
+      definition.body,
+      new Map(definition.parameterNames.map((name, index) => [name, Expr.render(inputExpressions[index])])),
+      available
+    );
+    const expandedFormula = `${expandedBody} = ${displayText}`;
     return {
       ok: true,
       operation: "EML_COMPOSITION",
@@ -221,8 +241,12 @@
       resultExpression: calculated.expression,
       canonicalKey: Expr.canonicalKey(calculated.expression),
       displayText,
-      directFormula: `${definition.name}(${inputText}) = ${displayText}`,
-      rewriteSteps: calculated.rewriteSteps,
+      directFormula: `${callText} = ${displayText}`,
+      expandedFormula,
+      rewriteSteps: [
+        ...(expandedBody === callText ? [] : [{ ruleId: "FUNCTION_EXPANSION", before: callText, after: expandedBody }]),
+        ...calculated.rewriteSteps,
+      ],
       limitReached: calculated.limitReached,
       approximation: Expr.approximate(calculated.expression),
     };
@@ -237,6 +261,7 @@
     validateDefinitionCalls,
     renderBody,
     renderDefinition,
+    renderExpandedBody,
     evaluate,
   };
 });

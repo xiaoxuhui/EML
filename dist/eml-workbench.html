@@ -1684,6 +1684,19 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return new Map((Array.isArray(definitions) ? definitions : []).map((item) => [item.name, item]));
   }
 
+  function renderExpandedBody(node, bindings, definitions, callStack = new Set()) {
+    if (node.type === "parameter") return bindings.get(node.name) || node.name;
+    if (node.type === "constant") return node.displayText;
+    if (node.type === "eml") {
+      return `EML(${renderExpandedBody(node.left, bindings, definitions, callStack)}, ${renderExpandedBody(node.right, bindings, definitions, callStack)})`;
+    }
+    const target = definitions.get(node.name);
+    if (!target || callStack.has(node.name)) return `${node.name}(${node.arguments.map((argument) => renderExpandedBody(argument, bindings, definitions, callStack)).join(", ")})`;
+    const argumentTexts = node.arguments.map((argument) => renderExpandedBody(argument, bindings, definitions, callStack));
+    const targetBindings = new Map(target.parameterNames.map((name, index) => [name, argumentTexts[index]]));
+    return renderExpandedBody(target.body, targetBindings, definitions, new Set([...callStack, node.name]));
+  }
+
   function validateDefinitionCalls(definition, definitions) {
     const available = definitionMap(definitions);
     let error = "";
@@ -1765,6 +1778,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (!calculated.ok) return calculated;
     const displayText = Expr.render(calculated.expression);
     const inputText = inputExpressions.map((expression) => Expr.render(expression)).join(", ");
+    const callText = `${definition.name}(${inputText})`;
+    const expandedBody = renderExpandedBody(
+      definition.body,
+      new Map(definition.parameterNames.map((name, index) => [name, Expr.render(inputExpressions[index])])),
+      available
+    );
+    const expandedFormula = `${expandedBody} = ${displayText}`;
     return {
       ok: true,
       operation: "EML_COMPOSITION",
@@ -1776,8 +1796,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       resultExpression: calculated.expression,
       canonicalKey: Expr.canonicalKey(calculated.expression),
       displayText,
-      directFormula: `${definition.name}(${inputText}) = ${displayText}`,
-      rewriteSteps: calculated.rewriteSteps,
+      directFormula: `${callText} = ${displayText}`,
+      expandedFormula,
+      rewriteSteps: [
+        ...(expandedBody === callText ? [] : [{ ruleId: "FUNCTION_EXPANSION", before: callText, after: expandedBody }]),
+        ...calculated.rewriteSteps,
+      ],
       limitReached: calculated.limitReached,
       approximation: Expr.approximate(calculated.expression),
     };
@@ -1792,6 +1816,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     validateDefinitionCalls,
     renderBody,
     renderDefinition,
+    renderExpandedBody,
     evaluate,
   };
 });
@@ -2010,6 +2035,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       rawExpression: evaluation.rawExpression,
       resultValueId,
       directFormula: evaluation.directFormula,
+      expandedFormula: evaluation.expandedFormula,
       rewriteSteps: evaluation.rewriteSteps,
     };
     if (!existingDerivation) {
@@ -2187,7 +2213,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           const treeDerivation = {
             type: "derivation",
             derivationId: derivation.id,
-            directFormula: derivation.directFormula,
+            directFormula: derivation.expandedFormula || derivation.directFormula,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };
@@ -2704,7 +2730,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
       if (derivation) {
         step.operation = derivation.operation || "EML";
-        step.directFormula = derivation.directFormula || "";
+        step.directFormula = derivation.expandedFormula || derivation.directFormula || "";
         step.rewriteSteps = Array.isArray(derivation.rewriteSteps) ? derivation.rewriteSteps : [];
         // 先访问输入：后序保证任何一步被记录时，它的输入都已在前
         const inputIds = Array.isArray(derivation.inputValueIds)

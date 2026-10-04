@@ -28,6 +28,7 @@ test("UCF05 嵌套 EML 使用多个输入得到符号结果", () => {
   assert.equal(result.ok, true);
   assert.equal(result.displayText, "e^(e)");
   assert.equal(result.directFormula, "F(1, 1, 1) = e^(e)");
+  assert.equal(result.expandedFormula, "EML(EML(1, 1), 1) = e^(e)");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_ONE"));
 });
 
@@ -93,6 +94,8 @@ test("MF09 已定义函数可被新函数调用并展开求值", () => {
   assert.equal(result.ok, true);
   assert.equal(result.displayText, "e");
   assert.equal(result.directFormula, "g(1) = e");
+  assert.equal(result.expandedFormula, "EML(1, 1) = e");
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "FUNCTION_EXPANSION"));
 });
 
 test("MF10 拒绝未定义函数、自引用和参数数量不匹配", () => {

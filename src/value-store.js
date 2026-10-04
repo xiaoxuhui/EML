@@ -210,6 +210,7 @@
       rawExpression: evaluation.rawExpression,
       resultValueId,
       directFormula: evaluation.directFormula,
+      expandedFormula: evaluation.expandedFormula,
       rewriteSteps: evaluation.rewriteSteps,
     };
     if (!existingDerivation) {
@@ -387,7 +388,7 @@
           const treeDerivation = {
             type: "derivation",
             derivationId: derivation.id,
-            directFormula: derivation.directFormula,
+            directFormula: derivation.expandedFormula || derivation.directFormula,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };
