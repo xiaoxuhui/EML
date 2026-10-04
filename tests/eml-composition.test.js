@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const Expr = require("../src/expression.js");
+const Evaluator = require("../src/evaluator.js");
 const Composition = require("../src/eml-composition.js");
 const Store = require("../src/value-store.js");
 
@@ -53,6 +54,42 @@ test("VF05 可视化定义拒绝未填入的表达式槽", () => {
     type: "eml", left: { type: "parameter", name: "x" }, right: null,
   });
   assert.deepEqual(definition, { ok: false, error: "表达式中仍有未填入的输入槽。" });
+});
+
+test("VF10 数值栏固定值在完整计算树中继续展开来源", () => {
+  let state = Store.createInitialState();
+  const e = Evaluator.evaluateEML(Expr.ONE, Expr.ONE);
+  state = Store.addEvaluation(state, e, Store.initialValueId, Store.initialValueId).state;
+  const eValueId = state.selectedValueId;
+  const ePowerE = Evaluator.evaluateEML(state.values[eValueId].canonicalExpression, Expr.ONE);
+  state = Store.addEvaluation(state, ePowerE, eValueId, Store.initialValueId).state;
+  const ePowerEId = state.selectedValueId;
+  const definition = Composition.createDefinition("f", ["x"], {
+    type: "eml",
+    left: { type: "parameter", name: "x" },
+    right: {
+      type: "constant",
+      expression: state.values[ePowerEId].canonicalExpression,
+      displayText: state.values[ePowerEId].displayText,
+      sourceValueId: ePowerEId,
+    },
+  }).definition;
+  const evaluation = Composition.evaluate(definition, [Expr.ONE]);
+  state = Store.addCompositionEvaluation(state, evaluation, [Store.initialValueId]).state;
+  const tree = Store.getDetails(state, state.selectedValueId).tree.derivations[0].emlTree;
+  assert.equal(tree.inputs[1].source.label, "e^(e)");
+  assert.equal(tree.inputs[1].source.derivations[0].inputs[0].node.label, "e");
+});
+
+test("VF11 嵌套用户函数的完整计算树保留每层 EML", () => {
+  const eml = Composition.parseDefinition("eml(x, y) = EML(x, y)").definition;
+  const exp = Composition.parseDefinition("exp(x) = eml(x, 1)").definition;
+  const logarithm = Composition.parseDefinition("ln(x) = eml(1, exp(eml(1, x)))").definition;
+  const result = Composition.evaluate(logarithm, [Expr.ONE], [eml, exp, logarithm]);
+  assert.equal(result.ok, true);
+  assert.equal(result.emlTree.type, "eml");
+  assert.equal(result.emlTree.inputs[1].type, "eml");
+  assert.equal(result.emlTree.inputs[1].inputs[0].type, "eml");
 });
 
 test("组合函数传播内层 EML 的定义域错误", () => {

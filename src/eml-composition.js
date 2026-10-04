@@ -232,13 +232,28 @@
     const inputs = new Map(definition.parameterNames.map((name, index) => [name, inputExpressions[index]]));
     const available = definitionMap(definitions);
 
+    function hydrateParameterTrees(node, parameterTrees) {
+      if (!node || typeof node !== "object") return node;
+      if (node.type === "value" && node.parameterName && parameterTrees.has(node.parameterName)) {
+        return parameterTrees.get(node.parameterName);
+      }
+      if (node.type !== "eml") return node;
+      return { ...node, inputs: (node.inputs || []).map((input) => hydrateParameterTrees(input, parameterTrees)) };
+    }
+
     function evaluateNode(node) {
       if (node.type === "parameter") {
         const expression = inputs.get(node.name);
         return { ok: true, expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: Expr.render(expression), parameterName: node.name } };
       }
       if (node.type === "constant") {
-        return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: node.displayText } };
+        return {
+          ok: true,
+          expression: node.expression,
+          rewriteSteps: [],
+          limitReached: false,
+          emlTree: { type: "value", label: node.displayText, sourceValueId: node.sourceValueId || null },
+        };
       }
       if (node.type === "call") {
         const target = available.get(node.name);
@@ -249,13 +264,14 @@
         if (failed) return failed;
         const nested = evaluate(target, argumentsResult.map((result) => result.expression), available, new Set([...callStack, definition.name]));
         if (!nested.ok) return nested;
+        const parameterTrees = new Map(target.parameterNames.map((name, index) => [name, argumentsResult[index].emlTree]));
         return {
           ok: true,
           expression: nested.resultExpression,
           rawExpression: nested.rawExpression,
           rewriteSteps: [...argumentsResult.flatMap((result) => result.rewriteSteps), ...nested.rewriteSteps],
           limitReached: argumentsResult.some((result) => result.limitReached) || nested.limitReached,
-          emlTree: nested.emlTree,
+          emlTree: hydrateParameterTrees(nested.emlTree, parameterTrees),
         };
       }
       const left = evaluateNode(node.left);

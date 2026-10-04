@@ -257,7 +257,12 @@
     definitionDraft.pendingSource = null;
     if (source.kind === "function") placeDefinitionNode(path, functionNode(source.payload.name, source.payload.inputCount));
     if (source.kind === "parameter") placeDefinitionNode(path, { type: "parameter", name: source.payload.name });
-    if (source.kind === "value") placeDefinitionNode(path, { type: "constant", expression: source.payload.expression, displayText: source.payload.displayText });
+    if (source.kind === "value") placeDefinitionNode(path, {
+      type: "constant",
+      expression: source.payload.expression,
+      displayText: source.payload.displayText,
+      sourceValueId: source.payload.valueId || null,
+    });
   }
 
   function bindDefinitionSlot(slot, path) {
@@ -312,7 +317,7 @@
     elements.definitionValueSources.replaceChildren();
     state.valueOrder.forEach((valueId) => {
       const value = state.values[valueId];
-      if (value) elements.definitionValueSources.appendChild(definitionSource("value", value.displayText, { expression: value.canonicalExpression, displayText: value.displayText }));
+      if (value) elements.definitionValueSources.appendChild(definitionSource("value", value.displayText, { expression: value.canonicalExpression, displayText: value.displayText, valueId }));
     });
   }
 
@@ -482,7 +487,7 @@
         suppressValueClick = true;
         const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
         if (target?.classList.contains("definition-slot")) {
-          applyDefinitionSource({ kind: "value", payload: { expression: value.canonicalExpression, displayText: value.displayText } }, target.dataset.definitionPath);
+          applyDefinitionSource({ kind: "value", payload: { expression: value.canonicalExpression, displayText: value.displayText, valueId } }, target.dataset.definitionPath);
         } else if (target) assignInput(target.dataset.slot, drag.valueId);
       });
 

@@ -1821,13 +1821,28 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const inputs = new Map(definition.parameterNames.map((name, index) => [name, inputExpressions[index]]));
     const available = definitionMap(definitions);
 
+    function hydrateParameterTrees(node, parameterTrees) {
+      if (!node || typeof node !== "object") return node;
+      if (node.type === "value" && node.parameterName && parameterTrees.has(node.parameterName)) {
+        return parameterTrees.get(node.parameterName);
+      }
+      if (node.type !== "eml") return node;
+      return { ...node, inputs: (node.inputs || []).map((input) => hydrateParameterTrees(input, parameterTrees)) };
+    }
+
     function evaluateNode(node) {
       if (node.type === "parameter") {
         const expression = inputs.get(node.name);
         return { ok: true, expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: Expr.render(expression), parameterName: node.name } };
       }
       if (node.type === "constant") {
-        return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: node.displayText } };
+        return {
+          ok: true,
+          expression: node.expression,
+          rewriteSteps: [],
+          limitReached: false,
+          emlTree: { type: "value", label: node.displayText, sourceValueId: node.sourceValueId || null },
+        };
       }
       if (node.type === "call") {
         const target = available.get(node.name);
@@ -1838,13 +1853,14 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         if (failed) return failed;
         const nested = evaluate(target, argumentsResult.map((result) => result.expression), available, new Set([...callStack, definition.name]));
         if (!nested.ok) return nested;
+        const parameterTrees = new Map(target.parameterNames.map((name, index) => [name, argumentsResult[index].emlTree]));
         return {
           ok: true,
           expression: nested.resultExpression,
           rawExpression: nested.rawExpression,
           rewriteSteps: [...argumentsResult.flatMap((result) => result.rewriteSteps), ...nested.rewriteSteps],
           limitReached: argumentsResult.some((result) => result.limitReached) || nested.limitReached,
-          emlTree: nested.emlTree,
+          emlTree: hydrateParameterTrees(nested.emlTree, parameterTrees),
         };
       }
       const left = evaluateNode(node.left);
@@ -2315,7 +2331,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       function attachCompositionSources(node, parameterValueIds) {
         if (!node || typeof node !== "object") return node;
         if (node.type === "value") {
-          const sourceId = parameterValueIds.get(node.parameterName);
+          const sourceId = node.sourceValueId || parameterValueIds.get(node.parameterName) || valueOrderIdForExpression(state, node.label);
           return sourceId ? { ...node, source: buildNode(sourceId, nextPath, depth + 1) } : node;
         }
         if (node.type !== "eml") return node;
@@ -2360,6 +2376,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }
 
     return buildNode(valueId, new Set(), 0);
+  }
+
+  function valueOrderIdForExpression(state, displayText) {
+    return state.valueOrder.find((valueId) => state.values[valueId]?.displayText === displayText) || null;
   }
 
   function treeHasDeferredBranches(node) {
@@ -3211,7 +3231,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     definitionDraft.pendingSource = null;
     if (source.kind === "function") placeDefinitionNode(path, functionNode(source.payload.name, source.payload.inputCount));
     if (source.kind === "parameter") placeDefinitionNode(path, { type: "parameter", name: source.payload.name });
-    if (source.kind === "value") placeDefinitionNode(path, { type: "constant", expression: source.payload.expression, displayText: source.payload.displayText });
+    if (source.kind === "value") placeDefinitionNode(path, {
+      type: "constant",
+      expression: source.payload.expression,
+      displayText: source.payload.displayText,
+      sourceValueId: source.payload.valueId || null,
+    });
   }
 
   function bindDefinitionSlot(slot, path) {
@@ -3266,7 +3291,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     elements.definitionValueSources.replaceChildren();
     state.valueOrder.forEach((valueId) => {
       const value = state.values[valueId];
-      if (value) elements.definitionValueSources.appendChild(definitionSource("value", value.displayText, { expression: value.canonicalExpression, displayText: value.displayText }));
+      if (value) elements.definitionValueSources.appendChild(definitionSource("value", value.displayText, { expression: value.canonicalExpression, displayText: value.displayText, valueId }));
     });
   }
 
@@ -3436,7 +3461,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         suppressValueClick = true;
         const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
         if (target?.classList.contains("definition-slot")) {
-          applyDefinitionSource({ kind: "value", payload: { expression: value.canonicalExpression, displayText: value.displayText } }, target.dataset.definitionPath);
+          applyDefinitionSource({ kind: "value", payload: { expression: value.canonicalExpression, displayText: value.displayText, valueId } }, target.dataset.definitionPath);
         } else if (target) assignInput(target.dataset.slot, drag.valueId);
       });
 

@@ -394,7 +394,7 @@
       function attachCompositionSources(node, parameterValueIds) {
         if (!node || typeof node !== "object") return node;
         if (node.type === "value") {
-          const sourceId = parameterValueIds.get(node.parameterName);
+          const sourceId = node.sourceValueId || parameterValueIds.get(node.parameterName) || valueOrderIdForExpression(state, node.label);
           return sourceId ? { ...node, source: buildNode(sourceId, nextPath, depth + 1) } : node;
         }
         if (node.type !== "eml") return node;
@@ -439,6 +439,10 @@
     }
 
     return buildNode(valueId, new Set(), 0);
+  }
+
+  function valueOrderIdForExpression(state, displayText) {
+    return state.valueOrder.find((valueId) => state.values[valueId]?.displayText === displayText) || null;
   }
 
   function treeHasDeferredBranches(node) {
