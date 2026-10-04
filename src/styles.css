@@ -265,7 +265,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .rewrite-steps { color: var(--muted); font-size: 13px; }
 .expanded-eml-derivation { border-left-color: #437f88; }
 .expanded-eml-node { min-width: 0; margin: 8px 0; }
-.expanded-eml-heading { font-family: Cambria, "Times New Roman", serif; font-weight: 700; color: #173f45; }
+.expanded-eml-heading { cursor: pointer; font-family: Cambria, "Times New Roman", serif; font-weight: 700; color: #173f45; }
 .expanded-eml-inputs { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 0 14px; }
 .expanded-eml-input { min-width: 0; color: #34434d; font-family: Cambria, "Times New Roman", serif; overflow-wrap: anywhere; }
 .expanded-eml-label { font-weight: 700; }

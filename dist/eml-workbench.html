@@ -273,7 +273,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .rewrite-steps { color: var(--muted); font-size: 13px; }
 .expanded-eml-derivation { border-left-color: #437f88; }
 .expanded-eml-node { min-width: 0; margin: 8px 0; }
-.expanded-eml-heading { font-family: Cambria, "Times New Roman", serif; font-weight: 700; color: #173f45; }
+.expanded-eml-heading { cursor: pointer; font-family: Cambria, "Times New Roman", serif; font-weight: 700; color: #173f45; }
 .expanded-eml-inputs { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 0 14px; }
 .expanded-eml-input { min-width: 0; color: #34434d; font-family: Cambria, "Times New Roman", serif; overflow-wrap: anywhere; }
 .expanded-eml-label { font-weight: 700; }
@@ -3196,7 +3196,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     container.appendChild(item);
   }
 
-  function renderExpandedEml(node) {
+  function renderExpandedEml(node, expanded) {
     if (!node || node.type !== "eml") {
       const value = document.createElement("div");
       value.className = "expanded-eml-value";
@@ -3211,13 +3211,14 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       } else if (source?.initial) {
         value.append("（初始值）");
       } else if (source?.derivations?.length) {
-        source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation)));
+        source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation, false)));
       }
       return value;
     }
-    const element = document.createElement("section");
+    const element = document.createElement("details");
     element.className = "expanded-eml-node";
-    const heading = document.createElement("div");
+    element.open = Boolean(expanded);
+    const heading = document.createElement("summary");
     heading.className = "expanded-eml-heading";
     heading.textContent = "EML";
     element.appendChild(heading);
@@ -3230,18 +3231,18 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       label.className = "expanded-eml-label";
       label.textContent = `${name}: `;
       branch.appendChild(label);
-      branch.appendChild(renderExpandedEml(node.inputs?.[index]));
+      branch.appendChild(renderExpandedEml(node.inputs?.[index], false));
       inputs.appendChild(branch);
     });
     element.appendChild(inputs);
     return element;
   }
 
-  function renderDerivation(derivation) {
+  function renderDerivation(derivation, expanded = true) {
     if (derivation.emlTree?.type === "eml") {
       const container = document.createElement("div");
       container.className = "tree-derivation expanded-eml-derivation";
-      container.appendChild(renderExpandedEml(derivation.emlTree));
+      container.appendChild(renderExpandedEml(derivation.emlTree, expanded));
       return container;
     }
     const details = document.createElement("details");

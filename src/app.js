@@ -343,7 +343,7 @@
     container.appendChild(item);
   }
 
-  function renderExpandedEml(node) {
+  function renderExpandedEml(node, expanded) {
     if (!node || node.type !== "eml") {
       const value = document.createElement("div");
       value.className = "expanded-eml-value";
@@ -358,13 +358,14 @@
       } else if (source?.initial) {
         value.append("（初始值）");
       } else if (source?.derivations?.length) {
-        source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation)));
+        source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation, false)));
       }
       return value;
     }
-    const element = document.createElement("section");
+    const element = document.createElement("details");
     element.className = "expanded-eml-node";
-    const heading = document.createElement("div");
+    element.open = Boolean(expanded);
+    const heading = document.createElement("summary");
     heading.className = "expanded-eml-heading";
     heading.textContent = "EML";
     element.appendChild(heading);
@@ -377,18 +378,18 @@
       label.className = "expanded-eml-label";
       label.textContent = `${name}: `;
       branch.appendChild(label);
-      branch.appendChild(renderExpandedEml(node.inputs?.[index]));
+      branch.appendChild(renderExpandedEml(node.inputs?.[index], false));
       inputs.appendChild(branch);
     });
     element.appendChild(inputs);
     return element;
   }
 
-  function renderDerivation(derivation) {
+  function renderDerivation(derivation, expanded = true) {
     if (derivation.emlTree?.type === "eml") {
       const container = document.createElement("div");
       container.className = "tree-derivation expanded-eml-derivation";
-      container.appendChild(renderExpandedEml(derivation.emlTree));
+      container.appendChild(renderExpandedEml(derivation.emlTree, expanded));
       return container;
     }
     const details = document.createElement("details");
