@@ -211,6 +211,23 @@ test("结果等于自身的公式不阻止删除数值", () => {
   assert.equal(Store.deleteValue(state, zeroId).status, "deleted");
 });
 
+test("双循环数值可通过级联删除一起移除", () => {
+  const state = initial();
+  const aId = Store.valueIdFor("cycle-a");
+  const bId = Store.valueIdFor("cycle-b");
+  for (const [id, label, derivationId] of [[aId, "a", "cycle-a"], [bId, "b", "cycle-b"]]) {
+    state.values[id] = { id, canonicalExpression: Expr.ZERO, canonicalKey: id, displayText: label, protected: false, derivationIds: [derivationId], createdAt: new Date().toISOString() };
+    state.valueOrder.push(id);
+  }
+  state.derivations["cycle-a"] = { id: "cycle-a", operation: "EML", xValueId: bId, yValueId: bId, resultValueId: aId, directFormula: "a = b", rawExpression: Expr.ZERO, rewriteSteps: [] };
+  state.derivations["cycle-b"] = { id: "cycle-b", operation: "EML", xValueId: aId, yValueId: aId, resultValueId: bId, directFormula: "b = a", rawExpression: Expr.ZERO, rewriteSteps: [] };
+  assert.deepEqual(new Set(Store.deletionClosure(state, aId)), new Set([aId, bId]));
+  const deleted = Store.deleteValueCascade(state, aId);
+  assert.equal(deleted.status, "deleted");
+  assert.equal(deleted.state.values[aId], undefined);
+  assert.equal(deleted.state.values[bId], undefined);
+});
+
 test("无效导入不会通过校验", () => {
   assert.equal(Persistence.deserialize('{"schemaVersion":2}').ok, false);
   assert.equal(Persistence.deserialize("not json").error, "文件不是有效的 JSON");

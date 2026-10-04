@@ -217,7 +217,18 @@
       event.stopPropagation();
       const result = Store.deleteValue(state, valueId);
       if (result.status === "referenced") {
-        showNotice("该数值已被其他公式引用，不能删除。", true);
+        const closure = Store.deletionClosure(state, valueId);
+        if (!window.confirm(`该数值及其 ${closure.length - 1} 个依赖结果会一并删除，相关公式也会删除。是否继续？`)) return;
+        const cascade = Store.deleteValueCascade(state, valueId);
+        if (cascade.status !== "deleted") {
+          showNotice("该数值存在受保护的依赖，无法级联删除。", true);
+          return;
+        }
+        state = cascade.state;
+        recomputePreview();
+        persistState();
+        showNotice(`已删除 ${cascade.deletedValueIds.length} 个相互依赖的数值及其公式。`, false);
+        render();
         return;
       }
       if (result.status !== "deleted") return;

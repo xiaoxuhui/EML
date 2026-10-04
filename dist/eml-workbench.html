@@ -1997,6 +1997,23 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     );
   }
 
+  function deletionClosure(state, valueId) {
+    if (!state.values[valueId]) return [];
+    const valueIds = new Set([valueId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const derivation of Object.values(state.derivations)) {
+        if (!derivation || !state.values[derivation.resultValueId]) continue;
+        if (derivationInputIds(derivation).some((inputValueId) => valueIds.has(inputValueId)) && !valueIds.has(derivation.resultValueId)) {
+          valueIds.add(derivation.resultValueId);
+          changed = true;
+        }
+      }
+    }
+    return [...valueIds];
+  }
+
   function deleteValue(state, valueId) {
     const value = state.values[valueId];
     if (!value) return { state, status: "missing" };
@@ -2015,6 +2032,31 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }));
     if (next.selectedValueId === valueId) next.selectedValueId = null;
     return { state: next, status: "deleted" };
+  }
+
+  function deleteValueCascade(state, valueId) {
+    const value = state.values[valueId];
+    if (!value) return { state, status: "missing" };
+    if (value.protected || valueId === initialValueId) return { state, status: "protected" };
+    const valueIds = deletionClosure(state, valueId);
+    if (valueIds.some((id) => state.values[id]?.protected || id === initialValueId)) return { state, status: "protected-dependency" };
+    const deletedIds = new Set(valueIds);
+    const next = cloneState(state);
+    for (const [derivationId, derivation] of Object.entries(next.derivations)) {
+      if (deletedIds.has(derivation.resultValueId) || derivationInputIds(derivation).some((id) => deletedIds.has(id))) {
+        delete next.derivations[derivationId];
+      }
+    }
+    for (const id of deletedIds) delete next.values[id];
+    next.valueOrder = next.valueOrder.filter((id) => !deletedIds.has(id));
+    if (deletedIds.has(next.inputXId)) next.inputXId = null;
+    if (deletedIds.has(next.inputYId)) next.inputYId = null;
+    next.customFunctions = getCustomFunctions(next).map((custom) => ({
+      ...custom,
+      inputValueIds: custom.inputValueIds.map((id) => deletedIds.has(id) ? null : id),
+    }));
+    if (deletedIds.has(next.selectedValueId)) next.selectedValueId = null;
+    return { state: next, status: "deleted", deletedValueIds: valueIds };
   }
 
   function clearNonInitial() {
@@ -2158,7 +2200,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     createInitialState,
     addEvaluation,
     addCompositionEvaluation,
+    deletionClosure,
     deleteValue,
+    deleteValueCascade,
     clearNonInitial,
     selectValue,
     setInput,
@@ -2896,7 +2940,18 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       event.stopPropagation();
       const result = Store.deleteValue(state, valueId);
       if (result.status === "referenced") {
-        showNotice("该数值已被其他公式引用，不能删除。", true);
+        const closure = Store.deletionClosure(state, valueId);
+        if (!window.confirm(`该数值及其 ${closure.length - 1} 个依赖结果会一并删除，相关公式也会删除。是否继续？`)) return;
+        const cascade = Store.deleteValueCascade(state, valueId);
+        if (cascade.status !== "deleted") {
+          showNotice("该数值存在受保护的依赖，无法级联删除。", true);
+          return;
+        }
+        state = cascade.state;
+        recomputePreview();
+        persistState();
+        showNotice(`已删除 ${cascade.deletedValueIds.length} 个相互依赖的数值及其公式。`, false);
+        render();
         return;
       }
       if (result.status !== "deleted") return;

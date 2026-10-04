@@ -196,6 +196,23 @@
     );
   }
 
+  function deletionClosure(state, valueId) {
+    if (!state.values[valueId]) return [];
+    const valueIds = new Set([valueId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const derivation of Object.values(state.derivations)) {
+        if (!derivation || !state.values[derivation.resultValueId]) continue;
+        if (derivationInputIds(derivation).some((inputValueId) => valueIds.has(inputValueId)) && !valueIds.has(derivation.resultValueId)) {
+          valueIds.add(derivation.resultValueId);
+          changed = true;
+        }
+      }
+    }
+    return [...valueIds];
+  }
+
   function deleteValue(state, valueId) {
     const value = state.values[valueId];
     if (!value) return { state, status: "missing" };
@@ -214,6 +231,31 @@
     }));
     if (next.selectedValueId === valueId) next.selectedValueId = null;
     return { state: next, status: "deleted" };
+  }
+
+  function deleteValueCascade(state, valueId) {
+    const value = state.values[valueId];
+    if (!value) return { state, status: "missing" };
+    if (value.protected || valueId === initialValueId) return { state, status: "protected" };
+    const valueIds = deletionClosure(state, valueId);
+    if (valueIds.some((id) => state.values[id]?.protected || id === initialValueId)) return { state, status: "protected-dependency" };
+    const deletedIds = new Set(valueIds);
+    const next = cloneState(state);
+    for (const [derivationId, derivation] of Object.entries(next.derivations)) {
+      if (deletedIds.has(derivation.resultValueId) || derivationInputIds(derivation).some((id) => deletedIds.has(id))) {
+        delete next.derivations[derivationId];
+      }
+    }
+    for (const id of deletedIds) delete next.values[id];
+    next.valueOrder = next.valueOrder.filter((id) => !deletedIds.has(id));
+    if (deletedIds.has(next.inputXId)) next.inputXId = null;
+    if (deletedIds.has(next.inputYId)) next.inputYId = null;
+    next.customFunctions = getCustomFunctions(next).map((custom) => ({
+      ...custom,
+      inputValueIds: custom.inputValueIds.map((id) => deletedIds.has(id) ? null : id),
+    }));
+    if (deletedIds.has(next.selectedValueId)) next.selectedValueId = null;
+    return { state: next, status: "deleted", deletedValueIds: valueIds };
   }
 
   function clearNonInitial() {
@@ -357,7 +399,9 @@
     createInitialState,
     addEvaluation,
     addCompositionEvaluation,
+    deletionClosure,
     deleteValue,
+    deleteValueCascade,
     clearNonInitial,
     selectValue,
     setInput,
