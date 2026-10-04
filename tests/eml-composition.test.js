@@ -29,6 +29,8 @@ test("UCF05 嵌套 EML 使用多个输入得到符号结果", () => {
   assert.equal(result.displayText, "e^(e)");
   assert.equal(result.directFormula, "EML(EML(1, 1), 1) = e^(e)");
   assert.equal(result.expandedFormula, "EML(EML(1, 1), 1) = e^(e)");
+  assert.equal(result.emlTree.type, "eml");
+  assert.equal(result.emlTree.inputs[0].type, "eml");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_ONE"));
 });
 
@@ -53,6 +55,7 @@ test("UCF06-UCF08 组合函数结果加入数值栏并保护全部输入", () =>
   assert.deepEqual(derivation.inputValueIds, [Store.initialValueId, Store.initialValueId, Store.initialValueId]);
   assert.equal(Store.isReferenced(added.state, Store.initialValueId), true);
   const tree = Store.getDetails(added.state, added.resultValueId).tree;
+  assert.equal(tree.derivations[0].emlTree.type, "eml");
   assert.deepEqual(Store.getDetails(added.state, added.resultValueId).directFormulas, ["EML(EML(1, 1), 1) = e^(e)"]);
   assert.equal(tree.derivations[0].inputs.length, 3);
   assert.deepEqual(tree.derivations[0].inputs.map((input) => input.name), ["x", "y", "z"]);

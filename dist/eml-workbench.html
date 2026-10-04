@@ -271,6 +271,14 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .tree-value { color: #34434d; }
 .tree-label { font-family: Cambria, "Times New Roman", serif; font-weight: 600; }
 .rewrite-steps { color: var(--muted); font-size: 13px; }
+.expanded-eml-derivation { border-left-color: #437f88; }
+.expanded-eml-node { min-width: 140px; border: 1px solid #a9cdd1; background: #f7fbfb; padding: 8px; margin: 8px 0; }
+.expanded-eml-heading { font-family: Cambria, "Times New Roman", serif; font-weight: 700; color: #173f45; }
+.expanded-eml-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.expanded-eml-input { min-width: 0; color: #34434d; font-family: Cambria, "Times New Roman", serif; overflow-wrap: anywhere; }
+.expanded-eml-label { font-weight: 700; }
+.expanded-eml-value { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .expanded-eml-inputs { grid-template-columns: 1fr; } }
 
 /* 推导过程：从初始值到当前数值的线性建造顺序 */
 .trace-heading {
@@ -1740,8 +1748,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const available = definitionMap(definitions);
 
     function evaluateNode(node) {
-      if (node.type === "parameter") return { ok: true, expression: inputs.get(node.name), rewriteSteps: [], limitReached: false };
-      if (node.type === "constant") return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false };
+      if (node.type === "parameter") {
+        const expression = inputs.get(node.name);
+        return { ok: true, expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: Expr.render(expression) } };
+      }
+      if (node.type === "constant") {
+        return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false, emlTree: { type: "value", label: node.displayText } };
+      }
       if (node.type === "call") {
         const target = available.get(node.name);
         if (!target) return { ok: false, error: `函数 ${node.name} 尚未定义。` };
@@ -1757,6 +1770,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           rawExpression: nested.rawExpression,
           rewriteSteps: [...argumentsResult.flatMap((result) => result.rewriteSteps), ...nested.rewriteSteps],
           limitReached: argumentsResult.some((result) => result.limitReached) || nested.limitReached,
+          emlTree: nested.emlTree,
         };
       }
       const left = evaluateNode(node.left);
@@ -1771,6 +1785,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         rawExpression: result.rawExpression,
         rewriteSteps: [...left.rewriteSteps, ...right.rewriteSteps, ...result.rewriteSteps],
         limitReached: left.limitReached || right.limitReached || result.limitReached,
+        emlTree: { type: "eml", inputs: [left.emlTree, right.emlTree] },
       };
     }
 
@@ -1799,6 +1814,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       // 函数名只属于调用控件；保存与展开的计算过程统一从实际 EML 式开始。
       directFormula: expandedFormula,
       expandedFormula,
+      emlTree: calculated.emlTree,
       rewriteSteps: [
         ...(expandedBody === callText ? [] : [{ ruleId: "FUNCTION_EXPANSION", before: callText, after: expandedBody }]),
         ...calculated.rewriteSteps,
@@ -2037,6 +2053,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       resultValueId,
       directFormula: evaluation.directFormula,
       expandedFormula: evaluation.expandedFormula,
+      emlTree: evaluation.emlTree,
       rewriteSteps: evaluation.rewriteSteps,
     };
     if (!existingDerivation) {
@@ -2215,6 +2232,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
             type: "derivation",
             derivationId: derivation.id,
             directFormula: derivation.expandedFormula || derivation.directFormula,
+            emlTree: derivation.emlTree,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };
@@ -2341,6 +2359,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       const expandedFormula = `${Composition.renderExpandedBody(parsed.definition.body, bindings, available)} = ${result.displayText}`;
       derivation.expandedFormula = expandedFormula;
       derivation.directFormula = expandedFormula;
+      const reevaluated = Composition.evaluate(parsed.definition, inputs, available);
+      if (reevaluated.ok) derivation.emlTree = reevaluated.emlTree;
     }
     return next;
   }
@@ -3161,7 +3181,42 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     container.appendChild(item);
   }
 
+  function renderExpandedEml(node) {
+    if (!node || node.type !== "eml") {
+      const value = document.createElement("span");
+      value.className = "expanded-eml-value";
+      value.textContent = node?.label || "未知";
+      return value;
+    }
+    const element = document.createElement("section");
+    element.className = "expanded-eml-node";
+    const heading = document.createElement("div");
+    heading.className = "expanded-eml-heading";
+    heading.textContent = "EML";
+    element.appendChild(heading);
+    const inputs = document.createElement("div");
+    inputs.className = "expanded-eml-inputs";
+    ["x", "y"].forEach((name, index) => {
+      const branch = document.createElement("div");
+      branch.className = "expanded-eml-input";
+      const label = document.createElement("span");
+      label.className = "expanded-eml-label";
+      label.textContent = `${name}: `;
+      branch.appendChild(label);
+      branch.appendChild(renderExpandedEml(node.inputs?.[index]));
+      inputs.appendChild(branch);
+    });
+    element.appendChild(inputs);
+    return element;
+  }
+
   function renderDerivation(derivation) {
+    if (derivation.emlTree?.type === "eml") {
+      const container = document.createElement("div");
+      container.className = "tree-derivation expanded-eml-derivation";
+      container.appendChild(renderExpandedEml(derivation.emlTree));
+      return container;
+    }
     const details = document.createElement("details");
     details.className = "tree-derivation";
     details.open = true;

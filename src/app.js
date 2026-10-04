@@ -343,7 +343,42 @@
     container.appendChild(item);
   }
 
+  function renderExpandedEml(node) {
+    if (!node || node.type !== "eml") {
+      const value = document.createElement("span");
+      value.className = "expanded-eml-value";
+      value.textContent = node?.label || "未知";
+      return value;
+    }
+    const element = document.createElement("section");
+    element.className = "expanded-eml-node";
+    const heading = document.createElement("div");
+    heading.className = "expanded-eml-heading";
+    heading.textContent = "EML";
+    element.appendChild(heading);
+    const inputs = document.createElement("div");
+    inputs.className = "expanded-eml-inputs";
+    ["x", "y"].forEach((name, index) => {
+      const branch = document.createElement("div");
+      branch.className = "expanded-eml-input";
+      const label = document.createElement("span");
+      label.className = "expanded-eml-label";
+      label.textContent = `${name}: `;
+      branch.appendChild(label);
+      branch.appendChild(renderExpandedEml(node.inputs?.[index]));
+      inputs.appendChild(branch);
+    });
+    element.appendChild(inputs);
+    return element;
+  }
+
   function renderDerivation(derivation) {
+    if (derivation.emlTree?.type === "eml") {
+      const container = document.createElement("div");
+      container.className = "tree-derivation expanded-eml-derivation";
+      container.appendChild(renderExpandedEml(derivation.emlTree));
+      return container;
+    }
     const details = document.createElement("details");
     details.className = "tree-derivation";
     details.open = true;

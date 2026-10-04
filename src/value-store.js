@@ -211,6 +211,7 @@
       resultValueId,
       directFormula: evaluation.directFormula,
       expandedFormula: evaluation.expandedFormula,
+      emlTree: evaluation.emlTree,
       rewriteSteps: evaluation.rewriteSteps,
     };
     if (!existingDerivation) {
@@ -389,6 +390,7 @@
             type: "derivation",
             derivationId: derivation.id,
             directFormula: derivation.expandedFormula || derivation.directFormula,
+            emlTree: derivation.emlTree,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };
