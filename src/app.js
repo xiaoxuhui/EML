@@ -358,7 +358,7 @@
       } else if (source?.initial) {
         value.append("（初始值）");
       } else if (source?.derivations?.length) {
-        source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation, false)));
+        source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation, true)));
       }
       return value;
     }
@@ -378,7 +378,7 @@
       label.className = "expanded-eml-label";
       label.textContent = `${name}: `;
       branch.appendChild(label);
-      branch.appendChild(renderExpandedEml(node.inputs?.[index], false));
+      branch.appendChild(renderExpandedEml(node.inputs?.[index], true));
       inputs.appendChild(branch);
     });
     element.appendChild(inputs);
