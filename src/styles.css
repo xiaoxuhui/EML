@@ -249,6 +249,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   line-height: 1;
 }
 .zoom-level { width: 46px; color: var(--muted); font-size: 12px; text-align: center; }
+.tree-viewer { display: grid; grid-template-columns: minmax(0, 1fr) 22px; gap: 8px; align-items: stretch; }
 .tree-viewport {
   position: relative;
   width: 100%;
@@ -260,6 +261,16 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   cursor: grab;
   touch-action: none;
 }
+.tree-vertical-scroll {
+  width: 22px;
+  min-height: 0;
+  margin: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  accent-color: var(--accent);
+  cursor: ns-resize;
+}
+.tree-vertical-scroll:disabled { cursor: default; opacity: 0.35; }
 .tree-viewport:active { cursor: grabbing; }
 .tree-viewport:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
 .tree-canvas {

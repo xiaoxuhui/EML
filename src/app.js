@@ -30,6 +30,7 @@
     derivationTrace: document.getElementById("derivationTrace"),
     calculationTreeViewport: document.getElementById("calculationTreeViewport"),
     calculationTree: document.getElementById("calculationTree"),
+    treeVerticalScroll: document.getElementById("treeVerticalScroll"),
     treeZoomOut: document.getElementById("treeZoomOut"),
     treeZoomIn: document.getElementById("treeZoomIn"),
     treeZoomLevel: document.getElementById("treeZoomLevel"),
@@ -64,6 +65,7 @@
     zoomIn: elements.treeZoomIn,
     zoomLevel: elements.treeZoomLevel,
     resetButton: elements.treeResetView,
+    verticalScroll: elements.treeVerticalScroll,
   });
 
   function restoreState() {

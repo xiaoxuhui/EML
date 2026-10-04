@@ -257,6 +257,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   line-height: 1;
 }
 .zoom-level { width: 46px; color: var(--muted); font-size: 12px; text-align: center; }
+.tree-viewer { display: grid; grid-template-columns: minmax(0, 1fr) 22px; gap: 8px; align-items: stretch; }
 .tree-viewport {
   position: relative;
   width: 100%;
@@ -268,6 +269,16 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   cursor: grab;
   touch-action: none;
 }
+.tree-vertical-scroll {
+  width: 22px;
+  min-height: 0;
+  margin: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  accent-color: var(--accent);
+  cursor: ns-resize;
+}
+.tree-vertical-scroll:disabled { cursor: default; opacity: 0.35; }
 .tree-viewport:active { cursor: grabbing; }
 .tree-viewport:focus-visible { outline: 3px solid rgba(8, 126, 139, 0.25); outline-offset: 2px; }
 .tree-canvas {
@@ -461,8 +472,11 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
               <button type="button" id="treeResetView" class="icon-button" title="复位计算树视图" aria-label="复位计算树视图">↺</button>
             </div>
           </div>
-          <div id="calculationTreeViewport" class="tree-viewport" tabindex="0" aria-label="完整计算树，可拖动或使用 W A S D 键移动">
-            <div id="calculationTree" class="tree-canvas"></div>
+          <div class="tree-viewer">
+            <div id="calculationTreeViewport" class="tree-viewport" tabindex="0" aria-label="完整计算树，可拖动或使用 W A S D 键移动">
+              <div id="calculationTree" class="tree-canvas"></div>
+            </div>
+            <input id="treeVerticalScroll" class="tree-vertical-scroll" type="range" min="0" max="1000" value="0" aria-label="拖动以浏览计算树高度" disabled>
           </div>
         </div>
       </div>
@@ -3018,6 +3032,24 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return { scale: 1, x: 0, y: 0 };
   }
 
+  function verticalScrollState(view, dimensions, maximum = 1000) {
+    const clamped = clampPosition(view, dimensions);
+    const contentHeight = Math.max(0, dimensions.contentHeight * clamped.scale);
+    const minimumY = Math.min(0, dimensions.viewportHeight - contentHeight);
+    if (minimumY === 0) return { value: 0, disabled: true };
+    return {
+      value: Math.max(0, Math.round((clamped.y / minimumY) * maximum)),
+      disabled: false,
+    };
+  }
+
+  function setVerticalScroll(view, value, dimensions, maximum = 1000) {
+    const contentHeight = Math.max(0, dimensions.contentHeight * view.scale);
+    const minimumY = Math.min(0, dimensions.viewportHeight - contentHeight);
+    if (minimumY === 0) return clampPosition(view, dimensions);
+    return clampPosition({ ...view, y: minimumY * clamp(Number(value) / maximum, 0, 1) }, dimensions);
+  }
+
   return {
     MIN_SCALE,
     MAX_SCALE,
@@ -3028,6 +3060,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     zoomAt,
     pan,
     wheelDeltaToPixels,
+    verticalScrollState,
+    setVerticalScroll,
     reset,
   };
 });
@@ -3046,7 +3080,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   "use strict";
 
   function create(options) {
-    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton } = options;
+    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton, verticalScroll } = options;
     let view = { ...ViewportModel.reset(), valueId: null };
     let pointer = null;
 
@@ -3066,6 +3100,11 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       zoomLevel.textContent = `${Math.round(view.scale * 100)}%`;
       zoomOut.disabled = view.scale <= ViewportModel.MIN_SCALE;
       zoomIn.disabled = view.scale >= ViewportModel.MAX_SCALE;
+      if (verticalScroll) {
+        const scroll = ViewportModel.verticalScrollState(view, dimensions(), Number(verticalScroll.max));
+        verticalScroll.value = String(scroll.value);
+        verticalScroll.disabled = scroll.disabled;
+      }
     }
 
     function zoom(delta) {
@@ -3094,6 +3133,15 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     zoomOut.addEventListener("click", () => zoom(-ViewportModel.SCALE_STEP));
     zoomIn.addEventListener("click", () => zoom(ViewportModel.SCALE_STEP));
     resetButton.addEventListener("click", () => reset());
+    if (verticalScroll) {
+      verticalScroll.addEventListener("input", () => {
+        view = {
+          ...ViewportModel.setVerticalScroll(view, verticalScroll.value, dimensions(), Number(verticalScroll.max)),
+          valueId: view.valueId,
+        };
+        apply();
+      });
+    }
 
     viewport.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;
@@ -3301,6 +3349,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     derivationTrace: document.getElementById("derivationTrace"),
     calculationTreeViewport: document.getElementById("calculationTreeViewport"),
     calculationTree: document.getElementById("calculationTree"),
+    treeVerticalScroll: document.getElementById("treeVerticalScroll"),
     treeZoomOut: document.getElementById("treeZoomOut"),
     treeZoomIn: document.getElementById("treeZoomIn"),
     treeZoomLevel: document.getElementById("treeZoomLevel"),
@@ -3335,6 +3384,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     zoomIn: elements.treeZoomIn,
     zoomLevel: elements.treeZoomLevel,
     resetButton: elements.treeResetView,
+    verticalScroll: elements.treeVerticalScroll,
   });
 
   function restoreState() {

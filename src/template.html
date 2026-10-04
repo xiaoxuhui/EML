@@ -102,8 +102,11 @@
               <button type="button" id="treeResetView" class="icon-button" title="复位计算树视图" aria-label="复位计算树视图">↺</button>
             </div>
           </div>
-          <div id="calculationTreeViewport" class="tree-viewport" tabindex="0" aria-label="完整计算树，可拖动或使用 W A S D 键移动">
-            <div id="calculationTree" class="tree-canvas"></div>
+          <div class="tree-viewer">
+            <div id="calculationTreeViewport" class="tree-viewport" tabindex="0" aria-label="完整计算树，可拖动或使用 W A S D 键移动">
+              <div id="calculationTree" class="tree-canvas"></div>
+            </div>
+            <input id="treeVerticalScroll" class="tree-vertical-scroll" type="range" min="0" max="1000" value="0" aria-label="拖动以浏览计算树高度" disabled>
           </div>
         </div>
       </div>

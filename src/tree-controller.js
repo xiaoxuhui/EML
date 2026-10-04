@@ -10,7 +10,7 @@
   "use strict";
 
   function create(options) {
-    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton } = options;
+    const { viewport, canvas, zoomOut, zoomIn, zoomLevel, resetButton, verticalScroll } = options;
     let view = { ...ViewportModel.reset(), valueId: null };
     let pointer = null;
 
@@ -30,6 +30,11 @@
       zoomLevel.textContent = `${Math.round(view.scale * 100)}%`;
       zoomOut.disabled = view.scale <= ViewportModel.MIN_SCALE;
       zoomIn.disabled = view.scale >= ViewportModel.MAX_SCALE;
+      if (verticalScroll) {
+        const scroll = ViewportModel.verticalScrollState(view, dimensions(), Number(verticalScroll.max));
+        verticalScroll.value = String(scroll.value);
+        verticalScroll.disabled = scroll.disabled;
+      }
     }
 
     function zoom(delta) {
@@ -58,6 +63,15 @@
     zoomOut.addEventListener("click", () => zoom(-ViewportModel.SCALE_STEP));
     zoomIn.addEventListener("click", () => zoom(ViewportModel.SCALE_STEP));
     resetButton.addEventListener("click", () => reset());
+    if (verticalScroll) {
+      verticalScroll.addEventListener("input", () => {
+        view = {
+          ...ViewportModel.setVerticalScroll(view, verticalScroll.value, dimensions(), Number(verticalScroll.max)),
+          valueId: view.valueId,
+        };
+        apply();
+      });
+    }
 
     viewport.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || event.target.closest("summary, button, a, input")) return;

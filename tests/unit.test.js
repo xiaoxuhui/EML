@@ -45,6 +45,18 @@ test("计算树滚轮增量统一转换为像素", () => {
   assert.equal(TreeViewport.wheelDeltaToPixels(2, 2, 300), 600);
 });
 
+test("计算树纵向拖杆与视图位置双向换算", () => {
+  const dimensions = { viewportWidth: 400, viewportHeight: 200, contentWidth: 400, contentHeight: 800 };
+  assert.deepEqual(TreeViewport.verticalScrollState({ scale: 1, x: 0, y: 0 }, dimensions), { value: 0, disabled: false });
+  const bottom = TreeViewport.setVerticalScroll({ scale: 1, x: 0, y: 0 }, 1000, dimensions);
+  assert.equal(bottom.y, -600);
+  assert.deepEqual(TreeViewport.verticalScrollState(bottom, dimensions), { value: 1000, disabled: false });
+  assert.deepEqual(
+    TreeViewport.verticalScrollState({ scale: 1, x: 0, y: 0 }, { ...dimensions, contentHeight: 100 }),
+    { value: 0, disabled: true }
+  );
+});
+
 test("U01 EML(1, 1) 化简为 e", () => {
   const result = evaluate(Expr.ONE, Expr.ONE);
   assert.equal(result.ok, true);

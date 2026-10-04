@@ -55,6 +55,24 @@
     return { scale: 1, x: 0, y: 0 };
   }
 
+  function verticalScrollState(view, dimensions, maximum = 1000) {
+    const clamped = clampPosition(view, dimensions);
+    const contentHeight = Math.max(0, dimensions.contentHeight * clamped.scale);
+    const minimumY = Math.min(0, dimensions.viewportHeight - contentHeight);
+    if (minimumY === 0) return { value: 0, disabled: true };
+    return {
+      value: Math.max(0, Math.round((clamped.y / minimumY) * maximum)),
+      disabled: false,
+    };
+  }
+
+  function setVerticalScroll(view, value, dimensions, maximum = 1000) {
+    const contentHeight = Math.max(0, dimensions.contentHeight * view.scale);
+    const minimumY = Math.min(0, dimensions.viewportHeight - contentHeight);
+    if (minimumY === 0) return clampPosition(view, dimensions);
+    return clampPosition({ ...view, y: minimumY * clamp(Number(value) / maximum, 0, 1) }, dimensions);
+  }
+
   return {
     MIN_SCALE,
     MAX_SCALE,
@@ -65,6 +83,8 @@
     zoomAt,
     pan,
     wheelDeltaToPixels,
+    verticalScrollState,
+    setVerticalScroll,
     reset,
   };
 });
