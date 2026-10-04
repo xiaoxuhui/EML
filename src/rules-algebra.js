@@ -10,7 +10,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Properties) {
   "use strict";
 
-  const { TYPES, ONE, ZERO, I, integer, neg, add, sub, mul, isSame, isInteger, isConstant } = Expr;
+  const { TYPES, ONE, ZERO, I, integer, neg, add, sub, mul, canonicalKey, isSame, isInteger, isConstant } = Expr;
   const { isProvablyNonZero, imaginaryCoefficient } = Properties;
 
   const rules = [
@@ -24,6 +24,9 @@
     { id: "ADD_ZERO", label: "a + 0 = a" },
     { id: "ADD_INVERSE", label: "a + (-a) = 0" },
     { id: "ADD_SUB_CANCEL", label: "(a - b) + b = a" },
+    { id: "ADD_SUB_SAME_LEFT", label: "(a - b) + a = a + a - b" },
+    { id: "ADD_SAME_HALF", label: "a / 2 + a / 2 = a" },
+    { id: "ADD_SUB_TERM_CANCEL", label: "加减式中的同项抵消" },
     { id: "ADD_IMAGINARY_COEFFICIENT", label: "ia + ib = i(a + b)" },
     { id: "SUB_ZERO", label: "a - 0 = a" },
     { id: "SUB_SELF", label: "a - a = 0" },
@@ -31,6 +34,7 @@
     { id: "SUB_NESTED_RIGHT", label: "(a - b) - a = -b" },
     { id: "SUB_NESTED_SAME_LEFT", label: "(a - b) - (a - c) = c - b" },
     { id: "SUB_NESTED_ADD_SAME_LEFT", label: "(a - b) - (a + c) = -(b + c)" },
+    { id: "SUB_NESTED_RATIONAL_FOLD", label: "r - (n - a) = (r - n) + a" },
     { id: "SUB_NEGATIVE", label: "a - (-b) = a + b" },
     { id: "SUB_NEGATIVE_FRACTION", label: "a - (-b / c) = a + b / c" },
     { id: "SUB_ADDED_LEFT", label: "a - (a + b) = -b" },
@@ -45,6 +49,7 @@
     { id: "I_SQUARED", label: "i × i = -1" },
     { id: "MUL_IMAGINARY_FACTORS", label: "(ia)(ib) = -ab" },
     { id: "MUL_NEG_FACTOR", label: "(-a)b = -(ab)" },
+    { id: "MUL_NEGATIVE_FRACTION", label: "a × (-b / c) = -(a × b / c)" },
     { id: "I_TIMES_I_FACTOR", label: "i(ia) = -a" },
     { id: "DIV_ONE", label: "a / 1 = a" },
     { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
@@ -102,6 +107,62 @@
     return a || 1;
   }
 
+  function cancelAdditiveTerms(expression) {
+    const terms = [];
+    const collect = (node, sign) => {
+      if (node.type === TYPES.ADD) {
+        collect(node.left, sign);
+        collect(node.right, sign);
+      } else if (node.type === TYPES.SUB) {
+        collect(node.left, sign);
+        collect(node.right, -sign);
+      } else if (node.type === TYPES.NEG) {
+        collect(node.child, -sign);
+      } else if (
+        node.type === TYPES.DIV && node.numerator.type === TYPES.INTEGER && node.numerator.value < 0
+      ) {
+        terms.push({
+          expression: Expr.div(integer(-node.numerator.value), node.denominator),
+          sign: -sign,
+        });
+      } else {
+        terms.push({ expression: node, sign });
+      }
+    };
+    collect(expression, 1);
+
+    const counts = new Map();
+    for (const term of terms) {
+      const key = canonicalKey(term.expression);
+      const entry = counts.get(key) || { positive: 0, negative: 0 };
+      if (term.sign > 0) entry.positive += 1;
+      else entry.negative += 1;
+      counts.set(key, entry);
+    }
+
+    const removals = new Map();
+    for (const [key, entry] of counts) {
+      const pairs = Math.min(entry.positive, entry.negative);
+      if (pairs > 0) removals.set(key, { positive: pairs, negative: pairs });
+    }
+    if (removals.size === 0) return null;
+
+    const remaining = [];
+    for (const term of terms) {
+      const removal = removals.get(canonicalKey(term.expression));
+      const direction = term.sign > 0 ? "positive" : "negative";
+      if (removal && removal[direction] > 0) removal[direction] -= 1;
+      else remaining.push(term);
+    }
+    if (remaining.length === 0) return ZERO;
+
+    let rebuilt = remaining[0].sign > 0 ? remaining[0].expression : neg(remaining[0].expression);
+    for (const term of remaining.slice(1)) {
+      rebuilt = term.sign > 0 ? add(rebuilt, term.expression) : sub(rebuilt, term.expression);
+    }
+    return rebuilt;
+  }
+
   function rewrite(expression) {
     if (expression.type === TYPES.NEG && expression.child.type === TYPES.NEG) {
       return { expression: expression.child.child, ruleId: "NEG_DOUBLE" };
@@ -145,9 +206,29 @@
       if (expression.left.type === TYPES.SUB && isSame(expression.left.right, expression.right)) {
         return { expression: expression.left.left, ruleId: "ADD_SUB_CANCEL" };
       }
+      if (expression.left.type === TYPES.SUB && isSame(expression.left.left, expression.right)) {
+        return {
+          expression: sub(add(expression.right, expression.right), expression.left.right),
+          ruleId: "ADD_SUB_SAME_LEFT",
+        };
+      }
       if (expression.right.type === TYPES.SUB && isSame(expression.left, expression.right.right)) {
         return { expression: expression.right.left, ruleId: "ADD_SUB_CANCEL" };
       }
+      if (
+        expression.left.type === TYPES.DIV && expression.right.type === TYPES.DIV &&
+        isInteger(expression.left.denominator, 2) && isInteger(expression.right.denominator, 2) &&
+        isSame(expression.left.numerator, expression.right.numerator)
+      ) return { expression: expression.left.numerator, ruleId: "ADD_SAME_HALF" };
+      if (
+        expression.left.type === TYPES.MUL && expression.right.type === TYPES.MUL &&
+        expression.left.right.type === TYPES.DIV && expression.right.right.type === TYPES.DIV &&
+        isInteger(expression.left.right.numerator, 1) && isInteger(expression.left.right.denominator, 2) &&
+        isInteger(expression.right.right.numerator, 1) && isInteger(expression.right.right.denominator, 2) &&
+        isSame(expression.left.left, expression.right.left)
+      ) return { expression: expression.left.left, ruleId: "ADD_SAME_HALF" };
+      const cancelled = cancelAdditiveTerms(expression);
+      if (cancelled) return { expression: cancelled, ruleId: "ADD_SUB_TERM_CANCEL" };
       const leftCoefficient = imaginaryCoefficient(expression.left);
       const rightCoefficient = imaginaryCoefficient(expression.right);
       if (leftCoefficient && rightCoefficient) {
@@ -184,7 +265,10 @@
           ruleId: "SUB_NEGATIVE_FRACTION",
         };
       }
-      if (expression.right.type === TYPES.DIV && isInteger(expression.right.numerator) && expression.right.numerator.value < 0) {
+      if (
+        expression.right.type === TYPES.DIV && expression.right.numerator.type === TYPES.INTEGER &&
+        expression.right.numerator.value < 0
+      ) {
         return {
           expression: add(expression.left, Expr.div(integer(-expression.right.numerator.value), expression.right.denominator)),
           ruleId: "SUB_NEGATIVE_FRACTION",
@@ -249,6 +333,16 @@
           ruleId: "SUB_NESTED_ADD_SAME_LEFT",
         };
       }
+      if (
+        expression.right.type === TYPES.SUB && expression.left.type === TYPES.DIV &&
+        expression.left.numerator.type === TYPES.INTEGER && expression.left.denominator.type === TYPES.INTEGER &&
+        expression.right.left.type === TYPES.INTEGER
+      ) {
+        return {
+          expression: add(sub(expression.left, expression.right.left), expression.right.right),
+          ruleId: "SUB_NESTED_RATIONAL_FOLD",
+        };
+      }
       // a - (b - c) = a - b + c
       //
       // 只有当 a 与 c（或 a 与 b）同为整数、能立刻算出整数结果时才改写：
@@ -310,6 +404,15 @@
         return {
           expression: Expr.div(mul(expression.left.numerator, I), expression.left.denominator),
           ruleId: "I_TIMES_DIV",
+        };
+      }
+      if (
+        expression.right.type === TYPES.DIV && expression.right.numerator.type === TYPES.INTEGER &&
+        expression.right.numerator.value < 0
+      ) {
+        return {
+          expression: neg(mul(expression.left, Expr.div(integer(-expression.right.numerator.value), expression.right.denominator))),
+          ruleId: "MUL_NEGATIVE_FRACTION",
         };
       }
       const leftCoefficient = imaginaryCoefficient(expression.left);

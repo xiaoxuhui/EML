@@ -693,6 +693,25 @@ test("整数分数加减与约分支持负分数", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "INTEGER_FRACTION_REDUCE"));
 });
 
+test("回归：用户长式的残余代数表达式化简为 π", () => {
+  const shared = Expr.sub(Expr.div(Expr.integer(3), Expr.integer(2)), Expr.sub(Expr.ONE, Expr.PI));
+  const expression = Expr.sub(
+    Expr.sub(
+      Expr.sub(
+        Expr.add(Expr.add(Expr.I, Expr.div(Expr.integer(-1), Expr.integer(4))), Expr.mul(shared, Expr.div(Expr.ONE, Expr.integer(2)))),
+        Expr.add(Expr.add(Expr.I, Expr.div(Expr.ONE, Expr.integer(2))), Expr.mul(shared, Expr.div(Expr.integer(-1), Expr.integer(2))))
+      ),
+      Expr.div(Expr.integer(-1), Expr.integer(4))
+    ),
+    Expr.ZERO
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "π");
+  assert.ok(result.steps.some((step) => step.ruleId === "ADD_SUB_TERM_CANCEL"));
+  assert.ok(result.steps.some((step) => step.ruleId === "ADD_SAME_HALF"));
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_NESTED_RATIONAL_FOLD"));
+});
+
 test("纯虚数系数规则不改写普通实数加法", () => {
   const result = Rules.simplify(Expr.add(Expr.PI, Expr.integer(2)));
   assert.equal(Expr.render(result.expression), "π + 2");
