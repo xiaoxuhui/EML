@@ -2291,10 +2291,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const valueStore = typeof module === "object" && module.exports
     ? require("./value-store.js")
     : root.EMLValueStore;
-  const api = factory(expression, valueStore);
+  const composition = typeof module === "object" && module.exports
+    ? require("./eml-composition.js")
+    : root.EMLComposition;
+  const api = factory(expression, valueStore, composition);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.EMLPersistence = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, ValueStore) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, ValueStore, Composition) {
   "use strict";
 
   const CACHE_KEY = "eml_workbench_v2";
@@ -2314,6 +2317,31 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       next.customFunctions = ValueStore.getCustomFunctions(next);
     }
     delete next.customFunction;
+    return next;
+  }
+
+  function migrateCompositionFormulas(candidate) {
+    const next = migrateCustomFunctions(candidate);
+    const definitions = new Map();
+    for (const custom of next.customFunctions) {
+      const parsed = Composition.parseDefinition(custom.definitionText);
+      if (parsed.ok) definitions.set(parsed.definition.name, parsed.definition);
+    }
+
+    for (const derivation of Object.values(next.derivations || {})) {
+      if (derivation.operation !== "EML_COMPOSITION" || !Array.isArray(derivation.inputValueIds)) continue;
+      const parsed = Composition.parseDefinition(derivation.functionDefinition);
+      const result = next.values[derivation.resultValueId];
+      const inputs = derivation.inputValueIds.map((valueId) => next.values[valueId]?.canonicalExpression);
+      if (!parsed.ok || !result || inputs.some((input) => !input) || inputs.length !== parsed.definition.parameterNames.length) continue;
+
+      const available = new Map(definitions);
+      available.set(parsed.definition.name, parsed.definition);
+      const bindings = new Map(parsed.definition.parameterNames.map((name, index) => [name, Expr.render(inputs[index])]));
+      const expandedFormula = `${Composition.renderExpandedBody(parsed.definition.body, bindings, available)} = ${result.displayText}`;
+      derivation.expandedFormula = expandedFormula;
+      derivation.directFormula = expandedFormula;
+    }
     return next;
   }
 
@@ -2341,7 +2369,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   }
 
   function validateState(candidate) {
-    candidate = migrateCustomFunctions(candidate);
+    candidate = migrateCompositionFormulas(candidate);
     if (!candidate || candidate.schemaVersion !== 2) return { ok: false, error: "不支持的数据版本" };
     if (!candidate.values || typeof candidate.values !== "object") return { ok: false, error: "缺少数值数据" };
     if (!candidate.derivations || typeof candidate.derivations !== "object") return { ok: false, error: "缺少公式数据" };

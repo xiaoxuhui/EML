@@ -113,3 +113,19 @@ test("UCF09 与 MF07-MF08：旧保存文件和单函数状态可迁移", () => {
   assert.equal(restored.ok, true);
   assert.deepEqual(restored.state.customFunctions, []);
 });
+
+test("旧组合函数记录迁移为展开的 EML 公式", () => {
+  const definition = Composition.parseDefinition("f(x) = EML(x, 1)").definition;
+  const evaluation = Composition.evaluate(definition, [Expr.ONE]);
+  const added = Store.addCompositionEvaluation(Store.createInitialState(), evaluation, [Store.initialValueId]);
+  const legacy = JSON.parse(Persistence.serialize(added.state));
+  const derivation = legacy.derivations[legacy.values[added.resultValueId].derivationIds[0]];
+  derivation.directFormula = "f(1) = e";
+  delete derivation.expandedFormula;
+
+  const restored = Persistence.deserialize(JSON.stringify(legacy));
+  assert.equal(restored.ok, true);
+  const migrated = restored.state.derivations[derivation.id];
+  assert.equal(migrated.directFormula, "EML(1, 1) = e");
+  assert.equal(migrated.expandedFormula, "EML(1, 1) = e");
+});
