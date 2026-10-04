@@ -399,6 +399,12 @@ test("欧拉特殊角：e^(-iπ / 2) 化简为 -i", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "EULER_NEG_HALF_IDENTITY"));
 });
 
+test("基础对数：ln(√(e)) 化简为 1 / 2", () => {
+  const result = Rules.simplify(Expr.ln(Expr.sqrt(Expr.E)));
+  assert.equal(Expr.render(result.expression), "1 / 2");
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_SQRT_E"));
+});
+
 test("回归：e^(iπ / 2 - ln(2)) 化简为 i / 2", () => {
   const halfIpi = Expr.div(Expr.mul(Expr.I, Expr.PI), Expr.integer(2));
   const exponent = Expr.sub(halfIpi, Expr.ln(Expr.integer(2)));

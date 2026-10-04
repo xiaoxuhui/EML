@@ -1032,6 +1032,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     { id: "EULER_NEG_HALF_IDENTITY", label: "e^(-iπ / 2) = -i" },
     { id: "LN_ONE", label: "ln(1) = 0" },
     { id: "LN_E", label: "ln(e) = 1" },
+    { id: "LN_SQRT_E", label: "ln(√(e)) = 1 / 2" },
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "LN_I", label: "ln(i) = iπ / 2（主值）" },
@@ -1172,6 +1173,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (expression.type === TYPES.LN) {
       if (isInteger(expression.argument, 1)) return { expression: ZERO, ruleId: "LN_ONE" };
       if (isConstant(expression.argument, "e")) return { expression: ONE, ruleId: "LN_E" };
+      if (expression.argument.type === TYPES.SQRT && isConstant(expression.argument.argument, "e")) {
+        return { expression: div(ONE, integer(2)), ruleId: "LN_SQRT_E" };
+      }
       if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) {
         return { expression: expression.argument.exponent, ruleId: "LN_EXP_FORMAL" };
       }
