@@ -37,18 +37,55 @@ test("导入校验拒绝畸形推导表达式和步骤", () => {
 
 test("依赖循环使用线性图检查拒绝", () => {
   const state = Store.createInitialState();
-  state.derivations.loop = {
-    id: "loop",
+  const eId = Store.valueIdFor(Expr.canonicalKey(Expr.E));
+  state.values[eId] = {
+    id: eId,
+    canonicalExpression: Expr.E,
+    canonicalKey: Expr.canonicalKey(Expr.E),
+    displayText: "e",
+    protected: false,
+    derivationIds: ["loop-e"],
+    createdAt: new Date().toISOString(),
+  };
+  state.valueOrder.push(eId);
+  state.derivations["loop-one"] = {
+    id: "loop-one",
     operation: "EML",
-    xValueId: Store.initialValueId,
-    yValueId: Store.initialValueId,
+    xValueId: eId,
+    yValueId: eId,
     resultValueId: Store.initialValueId,
     directFormula: "loop",
     rawExpression: Expr.ONE,
     rewriteSteps: [],
   };
-  state.values[Store.initialValueId].derivationIds.push("loop");
+  state.derivations["loop-e"] = {
+    id: "loop-e",
+    operation: "EML",
+    xValueId: Store.initialValueId,
+    yValueId: Store.initialValueId,
+    resultValueId: eId,
+    directFormula: "loop",
+    rawExpression: Expr.E,
+    rewriteSteps: [],
+  };
+  state.values[Store.initialValueId].derivationIds.push("loop-one");
   assert.equal(Persistence.hasDependencyCycle(state), true);
+});
+
+test("公式结果引用自身不作为依赖循环", () => {
+  const state = Store.createInitialState();
+  state.derivations.self = {
+    id: "self",
+    operation: "EML",
+    xValueId: Store.initialValueId,
+    yValueId: Store.initialValueId,
+    resultValueId: Store.initialValueId,
+    directFormula: "EML(1, 1) = 1",
+    rawExpression: Expr.ONE,
+    rewriteSteps: [],
+  };
+  state.values[Store.initialValueId].derivationIds.push("self");
+  assert.equal(Persistence.hasDependencyCycle(state), false);
 });
 
 test("导入文本大小受到限制", () => {

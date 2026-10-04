@@ -192,7 +192,7 @@
 
   function isReferenced(state, valueId) {
     return Object.values(state.derivations).some(
-      (derivation) => derivationInputIds(derivation).includes(valueId)
+      (derivation) => derivation.resultValueId !== valueId && derivationInputIds(derivation).includes(valueId)
     );
   }
 

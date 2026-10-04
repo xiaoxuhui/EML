@@ -42,7 +42,9 @@
       const value = state.values[valueId];
       for (const derivationId of value.derivationIds) {
         const derivation = state.derivations[derivationId];
-        if (derivation && ValueStore.derivationInputIds(derivation).some(visit)) return true;
+        if (derivation && ValueStore.derivationInputIds(derivation).some((inputValueId) => (
+          inputValueId !== derivation.resultValueId && visit(inputValueId)
+        ))) return true;
       }
       visiting.delete(valueId);
       visited.add(valueId);

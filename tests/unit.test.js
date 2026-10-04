@@ -183,6 +183,34 @@ test("被其他公式引用的数值不允许删除", () => {
   assert.equal(Store.deleteValue(addedNext.state, eId).status, "referenced");
 });
 
+test("结果等于自身的公式不阻止删除数值", () => {
+  const state = initial();
+  const zeroId = Store.valueIdFor(Expr.canonicalKey(Expr.ZERO));
+  state.values[zeroId] = {
+    id: zeroId,
+    canonicalExpression: Expr.ZERO,
+    canonicalKey: Expr.canonicalKey(Expr.ZERO),
+    displayText: "0",
+    protected: false,
+    derivationIds: ["self-zero"],
+    createdAt: new Date().toISOString(),
+  };
+  state.valueOrder.push(zeroId);
+  state.derivations["self-zero"] = {
+    id: "self-zero",
+    operation: "EML_COMPOSITION",
+    inputValueIds: [zeroId],
+    inputNames: ["x"],
+    functionDefinition: "identity(x) = x",
+    resultValueId: zeroId,
+    directFormula: "identity(0) = 0",
+    rawExpression: Expr.ZERO,
+    rewriteSteps: [],
+  };
+  assert.equal(Store.isReferenced(state, zeroId), false);
+  assert.equal(Store.deleteValue(state, zeroId).status, "deleted");
+});
+
 test("无效导入不会通过校验", () => {
   assert.equal(Persistence.deserialize('{"schemaVersion":2}').ok, false);
   assert.equal(Persistence.deserialize("not json").error, "文件不是有效的 JSON");

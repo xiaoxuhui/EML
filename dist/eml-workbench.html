@@ -1993,7 +1993,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   function isReferenced(state, valueId) {
     return Object.values(state.derivations).some(
-      (derivation) => derivationInputIds(derivation).includes(valueId)
+      (derivation) => derivation.resultValueId !== valueId && derivationInputIds(derivation).includes(valueId)
     );
   }
 
@@ -2219,7 +2219,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       const value = state.values[valueId];
       for (const derivationId of value.derivationIds) {
         const derivation = state.derivations[derivationId];
-        if (derivation && ValueStore.derivationInputIds(derivation).some(visit)) return true;
+        if (derivation && ValueStore.derivationInputIds(derivation).some((inputValueId) => (
+          inputValueId !== derivation.resultValueId && visit(inputValueId)
+        ))) return true;
       }
       visiting.delete(valueId);
       visited.add(valueId);
