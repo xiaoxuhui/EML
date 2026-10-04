@@ -109,6 +109,13 @@
       .filter((derivation) => derivation && !isCyclicDerivation(state, derivation));
   }
 
+  function displayDerivationFormula(derivation) {
+    if (derivation?.operation === "EML_COMPOSITION" && derivation.emlTree?.type === "eml") {
+      return `EML = ${derivation.emlTree.result}`;
+    }
+    return derivation?.expandedFormula || derivation?.directFormula || "公式数据缺失";
+  }
+
   function addEvaluation(state, evaluation, xValueId, yValueId) {
     if (!evaluation || !evaluation.ok) return { state, status: "invalid" };
     if (!state.values[xValueId] || !state.values[yValueId]) return { state, status: "missing-input" };
@@ -211,6 +218,7 @@
       resultValueId,
       directFormula: evaluation.directFormula,
       expandedFormula: evaluation.expandedFormula,
+      emlTree: evaluation.emlTree,
       rewriteSteps: evaluation.rewriteSteps,
     };
     if (!existingDerivation) {
@@ -388,7 +396,8 @@
           const treeDerivation = {
             type: "derivation",
             derivationId: derivation.id,
-            directFormula: derivation.expandedFormula || derivation.directFormula,
+            directFormula: displayDerivationFormula(derivation),
+            emlTree: derivation.emlTree,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };
@@ -419,7 +428,7 @@
     return {
       value,
       directFormulas: visibleDerivations(state, valueId)
-        .map((derivation) => derivation.expandedFormula || derivation.directFormula),
+        .map((derivation) => displayDerivationFormula(derivation)),
       tree: buildValueTree(state, valueId, treeOptions),
     };
   }
@@ -436,6 +445,7 @@
     compositionFormulaKeyFor,
     derivationInputIds,
     visibleDerivations,
+    displayDerivationFormula,
     createInitialState,
     addEvaluation,
     addCompositionEvaluation,

@@ -271,6 +271,16 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .tree-value { color: #34434d; }
 .tree-label { font-family: Cambria, "Times New Roman", serif; font-weight: 600; }
 .rewrite-steps { color: var(--muted); font-size: 13px; }
+.composition-tree-derivation { border-left-color: #437f88; }
+.composition-eml-node { min-width: 150px; border: 1px solid #a9cdd1; background: #f7fbfb; padding: 8px; margin: 8px 0; }
+.composition-eml-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-family: Cambria, "Times New Roman", serif; font-weight: 700; }
+.composition-eml-result { color: #27545a; font-weight: 600; overflow-wrap: anywhere; }
+.composition-eml-steps { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.composition-eml-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.composition-eml-input { min-width: 0; color: #34434d; font-family: Cambria, "Times New Roman", serif; }
+.composition-eml-label { font-weight: 700; }
+.composition-tree-value { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .composition-eml-inputs { grid-template-columns: 1fr; } }
 
 /* 推导过程：从初始值到当前数值的线性建造顺序 */
 .trace-heading {
@@ -1740,8 +1750,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const available = definitionMap(definitions);
 
     function evaluateNode(node) {
-      if (node.type === "parameter") return { ok: true, expression: inputs.get(node.name), rewriteSteps: [], limitReached: false };
-      if (node.type === "constant") return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false };
+      if (node.type === "parameter") {
+        const expression = inputs.get(node.name);
+        return { ok: true, expression, rewriteSteps: [], limitReached: false, tree: { type: "value", label: Expr.render(expression) } };
+      }
+      if (node.type === "constant") {
+        return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false, tree: { type: "value", label: node.displayText } };
+      }
       if (node.type === "call") {
         const target = available.get(node.name);
         if (!target) return { ok: false, error: `函数 ${node.name} 尚未定义。` };
@@ -1757,6 +1772,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           rawExpression: nested.rawExpression,
           rewriteSteps: [...argumentsResult.flatMap((result) => result.rewriteSteps), ...nested.rewriteSteps],
           limitReached: argumentsResult.some((result) => result.limitReached) || nested.limitReached,
+          tree: nested.emlTree,
         };
       }
       const left = evaluateNode(node.left);
@@ -1771,6 +1787,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         rawExpression: result.rawExpression,
         rewriteSteps: [...left.rewriteSteps, ...right.rewriteSteps, ...result.rewriteSteps],
         limitReached: left.limitReached || right.limitReached || result.limitReached,
+        tree: {
+          type: "eml",
+          result: Expr.render(result.resultExpression),
+          rewriteSteps: result.rewriteSteps,
+          inputs: [left.tree, right.tree],
+        },
       };
     }
 
@@ -1799,6 +1821,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       // 函数名只属于调用控件；保存与展开的计算过程统一从实际 EML 式开始。
       directFormula: expandedFormula,
       expandedFormula,
+      emlTree: calculated.tree,
       rewriteSteps: [
         ...(expandedBody === callText ? [] : [{ ruleId: "FUNCTION_EXPANSION", before: callText, after: expandedBody }]),
         ...calculated.rewriteSteps,
@@ -1935,6 +1958,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       .filter((derivation) => derivation && !isCyclicDerivation(state, derivation));
   }
 
+  function displayDerivationFormula(derivation) {
+    if (derivation?.operation === "EML_COMPOSITION" && derivation.emlTree?.type === "eml") {
+      return `EML = ${derivation.emlTree.result}`;
+    }
+    return derivation?.expandedFormula || derivation?.directFormula || "公式数据缺失";
+  }
+
   function addEvaluation(state, evaluation, xValueId, yValueId) {
     if (!evaluation || !evaluation.ok) return { state, status: "invalid" };
     if (!state.values[xValueId] || !state.values[yValueId]) return { state, status: "missing-input" };
@@ -2037,6 +2067,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       resultValueId,
       directFormula: evaluation.directFormula,
       expandedFormula: evaluation.expandedFormula,
+      emlTree: evaluation.emlTree,
       rewriteSteps: evaluation.rewriteSteps,
     };
     if (!existingDerivation) {
@@ -2214,7 +2245,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           const treeDerivation = {
             type: "derivation",
             derivationId: derivation.id,
-            directFormula: derivation.expandedFormula || derivation.directFormula,
+            directFormula: displayDerivationFormula(derivation),
+            emlTree: derivation.emlTree,
             rewriteSteps: derivation.rewriteSteps,
             inputs,
           };
@@ -2245,7 +2277,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return {
       value,
       directFormulas: visibleDerivations(state, valueId)
-        .map((derivation) => derivation.expandedFormula || derivation.directFormula),
+        .map((derivation) => displayDerivationFormula(derivation)),
       tree: buildValueTree(state, valueId, treeOptions),
     };
   }
@@ -2262,6 +2294,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     compositionFormulaKeyFor,
     derivationInputIds,
     visibleDerivations,
+    displayDerivationFormula,
     createInitialState,
     addEvaluation,
     addCompositionEvaluation,
@@ -2341,6 +2374,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       const expandedFormula = `${Composition.renderExpandedBody(parsed.definition.body, bindings, available)} = ${result.displayText}`;
       derivation.expandedFormula = expandedFormula;
       derivation.directFormula = expandedFormula;
+      const reevaluated = Composition.evaluate(parsed.definition, inputs, available);
+      if (reevaluated.ok) derivation.emlTree = reevaluated.emlTree;
     }
     return next;
   }
@@ -2759,7 +2794,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
       if (derivation) {
         step.operation = derivation.operation || "EML";
-        step.directFormula = derivation.expandedFormula || derivation.directFormula || "";
+        step.directFormula = derivation.operation === "EML_COMPOSITION" && derivation.emlTree?.type === "eml"
+          ? `EML = ${derivation.emlTree.result}`
+          : derivation.expandedFormula || derivation.directFormula || "";
         step.rewriteSteps = Array.isArray(derivation.rewriteSteps) ? derivation.rewriteSteps : [];
         // 先访问输入：后序保证任何一步被记录时，它的输入都已在前
         const inputIds = Array.isArray(derivation.inputValueIds)
@@ -3036,7 +3073,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       panel.appendChild(line);
       const direct = document.createElement("div");
       direct.className = "direct-preview";
-      direct.textContent = !evaluation ? "等待全部参数。" : !evaluation.ok ? evaluation.error : evaluation.limitReached ? "化简达到安全上限，当前结果尚不能添加。" : (evaluation.expandedFormula || evaluation.directFormula);
+      direct.textContent = !evaluation ? "等待全部参数。" : !evaluation.ok ? evaluation.error : evaluation.limitReached ? "化简达到安全上限，当前结果尚不能添加。" : evaluation.emlTree?.type === "eml" ? `EML = ${evaluation.emlTree.result}` : (evaluation.expandedFormula || evaluation.directFormula);
       panel.appendChild(direct);
       const remove = document.createElement("button");
       remove.type = "button";
@@ -3161,7 +3198,54 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     container.appendChild(item);
   }
 
+  function renderCompositionNode(node) {
+    if (!node || node.type !== "eml") {
+      const value = document.createElement("span");
+      value.className = "composition-tree-value";
+      value.textContent = node?.label || "未知";
+      return value;
+    }
+    const element = document.createElement("section");
+    element.className = "composition-eml-node";
+    const heading = document.createElement("div");
+    heading.className = "composition-eml-heading";
+    heading.textContent = "EML";
+    const result = document.createElement("span");
+    result.className = "composition-eml-result";
+    result.textContent = `= ${node.result}`;
+    heading.appendChild(result);
+    element.appendChild(heading);
+
+    if (node.rewriteSteps?.length) {
+      const summary = document.createElement("div");
+      summary.className = "composition-eml-steps";
+      summary.textContent = `化简 ${node.rewriteSteps.length} 步`;
+      element.appendChild(summary);
+    }
+
+    const inputs = document.createElement("div");
+    inputs.className = "composition-eml-inputs";
+    ["x", "y"].forEach((name, index) => {
+      const branch = document.createElement("div");
+      branch.className = "composition-eml-input";
+      const label = document.createElement("span");
+      label.className = "composition-eml-label";
+      label.textContent = `${name}: `;
+      branch.appendChild(label);
+      branch.appendChild(renderCompositionNode(node.inputs?.[index]));
+      inputs.appendChild(branch);
+    });
+    element.appendChild(inputs);
+    return element;
+  }
+
   function renderDerivation(derivation) {
+    if (derivation.emlTree?.type === "eml") {
+      const composition = document.createElement("div");
+      composition.className = "tree-derivation composition-tree-derivation";
+      composition.appendChild(renderCompositionNode(derivation.emlTree));
+      return composition;
+    }
     const details = document.createElement("details");
     details.className = "tree-derivation";
     details.open = true;

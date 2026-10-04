@@ -185,8 +185,13 @@
     const available = definitionMap(definitions);
 
     function evaluateNode(node) {
-      if (node.type === "parameter") return { ok: true, expression: inputs.get(node.name), rewriteSteps: [], limitReached: false };
-      if (node.type === "constant") return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false };
+      if (node.type === "parameter") {
+        const expression = inputs.get(node.name);
+        return { ok: true, expression, rewriteSteps: [], limitReached: false, tree: { type: "value", label: Expr.render(expression) } };
+      }
+      if (node.type === "constant") {
+        return { ok: true, expression: node.expression, rewriteSteps: [], limitReached: false, tree: { type: "value", label: node.displayText } };
+      }
       if (node.type === "call") {
         const target = available.get(node.name);
         if (!target) return { ok: false, error: `函数 ${node.name} 尚未定义。` };
@@ -202,6 +207,7 @@
           rawExpression: nested.rawExpression,
           rewriteSteps: [...argumentsResult.flatMap((result) => result.rewriteSteps), ...nested.rewriteSteps],
           limitReached: argumentsResult.some((result) => result.limitReached) || nested.limitReached,
+          tree: nested.emlTree,
         };
       }
       const left = evaluateNode(node.left);
@@ -216,6 +222,12 @@
         rawExpression: result.rawExpression,
         rewriteSteps: [...left.rewriteSteps, ...right.rewriteSteps, ...result.rewriteSteps],
         limitReached: left.limitReached || right.limitReached || result.limitReached,
+        tree: {
+          type: "eml",
+          result: Expr.render(result.resultExpression),
+          rewriteSteps: result.rewriteSteps,
+          inputs: [left.tree, right.tree],
+        },
       };
     }
 
@@ -244,6 +256,7 @@
       // 函数名只属于调用控件；保存与展开的计算过程统一从实际 EML 式开始。
       directFormula: expandedFormula,
       expandedFormula,
+      emlTree: calculated.tree,
       rewriteSteps: [
         ...(expandedBody === callText ? [] : [{ ruleId: "FUNCTION_EXPANSION", before: callText, after: expandedBody }]),
         ...calculated.rewriteSteps,
