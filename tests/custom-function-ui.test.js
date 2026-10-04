@@ -28,4 +28,6 @@ test("页面将动态槽位接入组合求值与原有添加机制", () => {
   assert.match(app, /Store\.deleteCustomFunction/);
   assert.match(app, /Store\.addCompositionEvaluation/);
   assert.match(app, /bindSlot\(slot, slot\.dataset\.slot\)/);
+  assert.match(app, /undoLastChange/);
+  assert.match(app, /event\.key\.toLowerCase\(\) === "z"/);
 });

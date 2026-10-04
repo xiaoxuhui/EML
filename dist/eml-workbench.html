@@ -2807,6 +2807,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   let state = restoreState();
   let preview = null;
+  const undoHistory = [];
+  const MAX_UNDO_HISTORY = 100;
   let customDefinitionError = "";
   let pointerDrag = null;
   let suppressValueClick = false;
@@ -2843,6 +2845,30 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       showNotice("无法写入浏览器缓存，请使用“保存列表”备份。", true);
       return false;
     }
+  }
+
+  function commitState(nextState) {
+    const before = JSON.stringify(state);
+    if (before === JSON.stringify(nextState)) return false;
+    undoHistory.push(before);
+    if (undoHistory.length > MAX_UNDO_HISTORY) undoHistory.shift();
+    state = nextState;
+    recomputePreview();
+    persistState();
+    return true;
+  }
+
+  function undoLastChange() {
+    const snapshot = undoHistory.pop();
+    if (!snapshot) {
+      showNotice("没有可撤销的操作。", false);
+      return;
+    }
+    state = JSON.parse(snapshot);
+    recomputePreview();
+    persistState();
+    showNotice("已撤销上一步操作。", false);
+    render();
   }
 
   function showNotice(message, isError = false) {
@@ -2988,17 +3014,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           showNotice("该数值存在受保护的依赖，无法级联删除。", true);
           return;
         }
-        state = cascade.state;
-        recomputePreview();
-        persistState();
+        commitState(cascade.state);
         showNotice(`已删除 ${cascade.deletedValueIds.length} 个相互依赖的数值及其公式。`, false);
         render();
         return;
       }
       if (result.status !== "deleted") return;
-      state = result.state;
-      recomputePreview();
-      persistState();
+      commitState(result.state);
       showNotice("已删除数值。", false);
       render();
     });
@@ -3280,12 +3302,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     if (slotName.startsWith("custom:")) {
       const parts = slotName.split(":");
       const inputIndex = Number(parts.pop());
-      state = Store.setCustomInput(state, parts.slice(1).join(":"), inputIndex, valueId);
+      commitState(Store.setCustomInput(state, parts.slice(1).join(":"), inputIndex, valueId));
     } else {
-      state = Store.setInput(state, slotName, valueId);
+      commitState(Store.setInput(state, slotName, valueId));
     }
-    recomputePreview();
-    persistState();
     showNotice("");
     render();
   }
@@ -3338,11 +3358,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       render();
       return;
     }
-    state = result.state;
+    commitState(result.state);
     customDefinitionError = "";
     elements.customDefinition.value = "";
-    recomputePreview();
-    persistState();
     showNotice(`已添加函数 ${parsed.definition.name}。`, false);
     render();
   });
@@ -3350,8 +3368,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   elements.add.addEventListener("click", () => {
     if (!preview || !preview.ok || !state.inputXId || !state.inputYId) return;
     const result = Store.addEvaluation(state, preview, state.inputXId, state.inputYId);
-    state = result.state;
-    persistState();
+    commitState(result.state);
     const messages = {
       "added-value": "已添加新数值和公式来源。",
       "added-formula": "数值已存在，已添加新的公式来源。",
@@ -3365,8 +3382,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   function addCustomEvaluation(custom, evaluation) {
     if (!evaluation || !evaluation.ok || evaluation.limitReached || custom.inputValueIds.some((id) => !id)) return;
     const result = Store.addCompositionEvaluation(state, evaluation, custom.inputValueIds);
-    state = result.state;
-    persistState();
+    commitState(result.state);
     const messages = {
       "added-value": "已添加组合函数结果和公式来源。",
       "added-formula": "数值已存在，已添加新的组合函数来源。",
@@ -3380,9 +3396,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   function deleteCustomFunction(functionId) {
     const result = Store.deleteCustomFunction(state, functionId);
     if (result.status !== "deleted") return;
-    state = result.state;
-    recomputePreview();
-    persistState();
+    commitState(result.state);
     showNotice("已删除函数定义；已保存的数值和公式来源保持不变。", false);
     render();
   }
@@ -3412,9 +3426,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         showNotice(`导入失败：${restored.error}。现有列表未改变。`, true);
         return;
       }
-      state = restored.state;
-      recomputePreview();
-      persistState();
+      commitState(restored.state);
       showNotice("导入成功。", false);
       render();
     };
@@ -3424,11 +3436,20 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
   elements.clear.addEventListener("click", () => {
     if (!window.confirm("清空所有非初始数值和公式？初始值 1 会保留。")) return;
-    state = Store.clearNonInitial();
-    preview = null;
-    persistState();
+    commitState(Store.clearNonInitial());
     showNotice("已清空，初始值 1 已保留。", false);
     render();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    const editingText = target instanceof HTMLElement && (
+      target.matches("input, textarea") || target.isContentEditable
+    );
+    if (!editingText && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      undoLastChange();
+    }
   });
 
   recomputePreview();
