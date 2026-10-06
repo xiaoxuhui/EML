@@ -126,8 +126,13 @@
       element.textContent = fallbackText;
       return;
     }
-    element.innerHTML = Expr.renderVisual(expression);
-    element.setAttribute("aria-label", fallbackText || Expr.render(expression));
+    const text = fallbackText || Expr.render(expression);
+    try {
+      root.katex.render(Expr.renderTex(expression), element, { throwOnError: true, strict: "ignore" });
+      element.setAttribute("aria-label", text);
+    } catch {
+      element.textContent = text;
+    }
   }
 
   function recomputePreview() {

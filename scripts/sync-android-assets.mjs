@@ -11,8 +11,8 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +20,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE = path.join(ROOT, "dist", "eml-workbench.html");
 const TARGET_DIR = path.join(ROOT, "android", "app", "src", "main", "assets");
 const TARGET = path.join(TARGET_DIR, "eml-workbench.html");
+const KATEX_SOURCE = path.join(ROOT, "dist", "katex");
+const KATEX_TARGET = path.join(TARGET_DIR, "katex");
 
 const checkOnly = process.argv.includes("--check");
 
@@ -36,7 +38,14 @@ async function main() {
   const sourceHash = sha256(source);
   const target = existsSync(TARGET) ? await readFile(TARGET) : null;
 
-  if (target && sha256(target) === sourceHash) {
+  const katexFiles = ["katex.js", "katex.min.css", path.join("fonts", "KaTeX_Main-Regular.woff2")];
+  const katexInSync = existsSync(KATEX_SOURCE) && katexFiles.every((file) => {
+    const sourceFile = path.join(KATEX_SOURCE, file);
+    const targetFile = path.join(KATEX_TARGET, file);
+    return existsSync(sourceFile) && existsSync(targetFile) && sha256(readFileSync(sourceFile)) === sha256(readFileSync(targetFile));
+  });
+
+  if (target && sha256(target) === sourceHash && katexInSync) {
     console.log(`✓ assets 已是最新（${source.length} 字节，sha256 ${sourceHash.slice(0, 12)}）`);
     return;
   }
@@ -51,6 +60,7 @@ async function main() {
 
   await mkdir(TARGET_DIR, { recursive: true });
   await writeFile(TARGET, source);
+  await cp(KATEX_SOURCE, KATEX_TARGET, { recursive: true, force: true });
   console.log(`✓ 已同步 ${path.relative(ROOT, TARGET)}`);
   console.log(`  ${source.length} 字节，sha256 ${sourceHash.slice(0, 12)}`);
 }

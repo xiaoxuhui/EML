@@ -147,53 +147,53 @@
     return ownPrecedence < parentPrecedence ? `(${text})` : text;
   }
 
-  function renderVisual(expression, parentPrecedence = 0) {
+  function renderTex(expression, parentPrecedence = 0) {
     const ownPrecedence = precedence(expression);
-    let markup;
+    let tex;
     switch (expression.type) {
       case TYPES.CONSTANT:
-        markup = `<span class="math-constant${expression.name === "pi" ? " math-pi" : ""}">${expression.name === "pi" ? "π" : expression.name}</span>`;
+        tex = expression.name === "pi" ? "\\pi" : expression.name;
         break;
       case TYPES.INTEGER:
-        markup = `<span class="math-number">${expression.value}</span>`;
+        tex = String(expression.value);
         break;
       case TYPES.NEG:
-        markup = `-${renderVisual(expression.child, ownPrecedence)}`;
+        tex = `-${renderTex(expression.child, ownPrecedence)}`;
         break;
       case TYPES.ADD:
-        markup = `${renderVisual(expression.left, ownPrecedence)} + ${renderVisual(expression.right, ownPrecedence)}`;
+        tex = `${renderTex(expression.left, ownPrecedence)} + ${renderTex(expression.right, ownPrecedence)}`;
         break;
       case TYPES.SUB:
-        markup = `${renderVisual(expression.left, ownPrecedence)} - ${renderVisual(expression.right, ownPrecedence + 1)}`;
+        tex = `${renderTex(expression.left, ownPrecedence)} - ${renderTex(expression.right, ownPrecedence + 1)}`;
         break;
       case TYPES.MUL: {
         const compact = [expression.left, expression.right].every((part) =>
           [TYPES.CONSTANT, TYPES.INTEGER].includes(part.type)
         );
-        markup = compact
-          ? `${renderVisual(expression.left, ownPrecedence)}${renderVisual(expression.right, ownPrecedence)}`
-          : `${renderVisual(expression.left, ownPrecedence)} × ${renderVisual(expression.right, ownPrecedence)}`;
+        tex = compact
+          ? `${renderTex(expression.left, ownPrecedence)}${renderTex(expression.right, ownPrecedence)}`
+          : `${renderTex(expression.left, ownPrecedence)} \\times ${renderTex(expression.right, ownPrecedence)}`;
         break;
       }
       case TYPES.DIV:
-        markup = `<span class="math-fraction"><span class="math-numerator">${renderVisual(expression.numerator)}</span><span class="math-denominator">${renderVisual(expression.denominator)}</span></span>`;
+        tex = `\\frac{${renderTex(expression.numerator)}}{${renderTex(expression.denominator)}}`;
         break;
       case TYPES.POW:
-        markup = `<span class="math-power"><span>${renderVisual(expression.base, ownPrecedence)}</span><sup>${renderVisual(expression.exponent)}</sup></span>`;
+        tex = `{${renderTex(expression.base, ownPrecedence)}}^{${renderTex(expression.exponent)}}`;
         break;
       case TYPES.LN:
-        markup = `ln(${renderVisual(expression.argument)})`;
+        tex = `\\ln\\left(${renderTex(expression.argument)}\\right)`;
         break;
       case TYPES.SQRT:
-        markup = `<span class="math-root"><span class="math-root-sign">√</span><span class="math-radicand">${renderVisual(expression.argument)}</span></span>`;
+        tex = `\\sqrt{${renderTex(expression.argument)}}`;
         break;
       case TYPES.SIN:
-        markup = `sin(${renderVisual(expression.argument)})`;
+        tex = `\\sin\\left(${renderTex(expression.argument)}\\right)`;
         break;
       default:
         throw new Error(`未知表达式类型：${expression.type}`);
     }
-    return ownPrecedence < parentPrecedence ? `(${markup})` : markup;
+    return ownPrecedence < parentPrecedence ? `\\left(${tex}\\right)` : tex;
   }
 
   function approximate(expression) {
@@ -360,7 +360,7 @@
     isInteger,
     isConstant,
     render,
-    renderVisual,
+    renderTex,
     approximate,
     isValidExpression,
     validateExpression,

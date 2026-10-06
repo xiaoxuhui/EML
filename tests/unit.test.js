@@ -773,15 +773,14 @@ test("回归：嵌套 e^(ln(ln(√2)) + ln(√2)) 化简为 √2 的 √2 次方
   assert.ok(result.steps.some((step) => step.ruleId === "EXP_PRODUCT_LN"));
 });
 
-test("视觉数学渲染使用真正的上标与根式横线", () => {
+test("TeX 数学渲染覆盖上标、根式、分式和数学常量", () => {
   const expression = Expr.pow(Expr.sqrt(Expr.div(Expr.integer(2), Expr.E)), Expr.sqrt(Expr.integer(2)));
-  const markup = Expr.renderVisual(expression);
-  assert.match(markup, /<sup>/);
-  assert.match(markup, /math-radicand/);
-  assert.match(markup, /math-fraction/);
-  assert.match(markup, /math-number/);
-  assert.match(markup, /math-constant/);
-  assert.equal(markup.includes("^(") , false);
+  const tex = Expr.renderTex(expression);
+  assert.match(tex, /\\sqrt/);
+  assert.match(tex, /\\frac/);
+  assert.match(tex, /\^\{/);
+  assert.match(tex, /e/);
+  assert.equal(tex.includes("^("), false);
 });
 
 test("sin 表达式支持符号显示、近似计算和保存校验", () => {

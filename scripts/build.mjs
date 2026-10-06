@@ -6,6 +6,9 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, "..");
 const srcDir = path.join(rootDir, "src");
 const distDir = path.join(rootDir, "dist");
+const katexSourceDir = path.join(srcDir, "vendor", "katex");
+const katexDistDir = path.join(distDir, "katex");
+const katexCoreSource = path.join(katexSourceDir, "katex-core.js");
 
 const template = fs.readFileSync(path.join(srcDir, "template.html"), "utf8");
 const styles = fs.readFileSync(path.join(srcDir, "styles.css"), "utf8");
@@ -33,5 +36,7 @@ const output = template
   .replace("/*__SCRIPTS__*/", scripts);
 
 fs.mkdirSync(distDir, { recursive: true });
+fs.cpSync(katexSourceDir, katexDistDir, { recursive: true, force: true });
+fs.copyFileSync(katexCoreSource, path.join(katexDistDir, "katex.js"));
 fs.writeFileSync(path.join(distDir, "eml-workbench.html"), output, "utf8");
 console.log(`Built dist/eml-workbench.html (${Buffer.byteLength(output)} bytes)`);
