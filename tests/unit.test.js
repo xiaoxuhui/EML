@@ -740,6 +740,17 @@ test("i / -i 继续化简为 -1", () => {
   assert.equal(Expr.render(Rules.simplify(Expr.div(Expr.I, Expr.neg(Expr.I))).expression), "-1");
 });
 
+test("回归：iπ × e^i / (e^i × i) 约分为 π", () => {
+  const exponential = Expr.pow(Expr.E, Expr.I);
+  const expression = Expr.div(
+    Expr.mul(Expr.mul(Expr.I, Expr.PI), exponential),
+    Expr.mul(exponential, Expr.I)
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "π");
+  assert.ok(result.steps.some((step) => step.ruleId === "DIV_COMMON_FACTOR_CANCEL"));
+});
+
 test("sin 表达式支持符号显示、近似计算和保存校验", () => {
   const expression = Expr.sin(Expr.ONE);
   assert.equal(Expr.render(expression), "sin(1)");
