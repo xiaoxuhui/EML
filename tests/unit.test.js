@@ -751,6 +751,16 @@ test("回归：iπ × e^i / (e^i × i) 约分为 π", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "DIV_COMMON_FACTOR_CANCEL"));
 });
 
+test("回归：e^(i - ln(2) - i × (1 - π / 2)) 化简为 i / 2", () => {
+  const exponent = Expr.sub(
+    Expr.sub(Expr.I, Expr.ln(Expr.integer(2))),
+    Expr.mul(Expr.I, Expr.sub(Expr.ONE, Expr.div(Expr.PI, Expr.integer(2))))
+  );
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "i / 2");
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_I_UNIT_PRODUCT"));
+});
+
 test("sin 表达式支持符号显示、近似计算和保存校验", () => {
   const expression = Expr.sin(Expr.ONE);
   assert.equal(Expr.render(expression), "sin(1)");

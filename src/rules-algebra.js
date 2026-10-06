@@ -51,6 +51,7 @@
     { id: "MUL_NEG_FACTOR", label: "(-a)b = -(ab)" },
     { id: "MUL_NEGATIVE_FRACTION", label: "a × (-b / c) = -(a × b / c)" },
     { id: "I_TIMES_I_FACTOR", label: "i(ia) = -a" },
+    { id: "SUB_I_UNIT_PRODUCT", label: "(i - a) - i(1 - b) = ib - a" },
     { id: "DIV_ONE", label: "a / 1 = a" },
     { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
     { id: "DIV_COMMON_FACTOR_CANCEL", label: "分子分母的公共非零因子约分" },
@@ -363,6 +364,16 @@
         return {
           expression: neg(add(expression.left.right, expression.right.right)),
           ruleId: "SUB_NESTED_ADD_SAME_LEFT",
+        };
+      }
+      if (
+        expression.left.type === TYPES.SUB && isConstant(expression.left.left, "i") &&
+        expression.right.type === TYPES.MUL && isConstant(expression.right.left, "i") &&
+        expression.right.right.type === TYPES.SUB && isInteger(expression.right.right.left, 1)
+      ) {
+        return {
+          expression: sub(mul(I, expression.right.right.right), expression.left.right),
+          ruleId: "SUB_I_UNIT_PRODUCT",
         };
       }
       if (
