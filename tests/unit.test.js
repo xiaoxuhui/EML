@@ -774,10 +774,13 @@ test("回归：嵌套 e^(ln(ln(√2)) + ln(√2)) 化简为 √2 的 √2 次方
 });
 
 test("视觉数学渲染使用真正的上标与根式横线", () => {
-  const expression = Expr.pow(Expr.sqrt(Expr.integer(2)), Expr.sqrt(Expr.integer(2)));
+  const expression = Expr.pow(Expr.sqrt(Expr.div(Expr.integer(2), Expr.E)), Expr.sqrt(Expr.integer(2)));
   const markup = Expr.renderVisual(expression);
   assert.match(markup, /<sup>/);
   assert.match(markup, /math-radicand/);
+  assert.match(markup, /math-fraction/);
+  assert.match(markup, /math-number/);
+  assert.match(markup, /math-constant/);
   assert.equal(markup.includes("^(") , false);
 });
 

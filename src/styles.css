@@ -85,11 +85,17 @@ h1 { margin: 0; font-size: 30px; line-height: 1; }
   white-space: nowrap;
 }
 .base-formula sup { font-size: 0.7em; }
+.math-number, .math-constant { font-family: "Cambria Math", Cambria, "Times New Roman", serif; }
+.math-constant { font-style: italic; }
+.math-pi { font-style: normal; }
 .math-power { display: inline-flex; align-items: flex-start; white-space: nowrap; }
 .math-power sup { margin-left: 1px; font-size: 0.68em; line-height: 1; }
 .math-root { display: inline-flex; align-items: flex-start; white-space: nowrap; }
-.math-root-sign { font-size: 1.2em; line-height: 0.95; }
-.math-radicand { margin-left: -1px; padding: 0 2px 1px; border-top: 1.4px solid currentColor; line-height: 0.95; }
+.math-root-sign { position: relative; z-index: 1; font-family: "Cambria Math", Cambria, "Times New Roman", serif; font-size: 1.22em; line-height: 0.94; }
+.math-radicand { margin: 0 0 0 -5px; padding: 1px 3px 1px 6px; border-top: 1.5px solid currentColor; line-height: 0.94; }
+.math-fraction { display: inline-flex; flex-direction: column; vertical-align: middle; min-width: 1.2em; margin: 0 0.08em; line-height: 1; text-align: center; }
+.math-numerator { padding: 0 0.16em 0.08em; }
+.math-denominator { border-top: 1.3px solid currentColor; padding: 0.08em 0.16em 0; }
 h2 { margin: 0; font-size: 17px; }
 h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 

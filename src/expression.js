@@ -152,10 +152,10 @@
     let markup;
     switch (expression.type) {
       case TYPES.CONSTANT:
-        markup = expression.name === "pi" ? "π" : expression.name;
+        markup = `<span class="math-constant${expression.name === "pi" ? " math-pi" : ""}">${expression.name === "pi" ? "π" : expression.name}</span>`;
         break;
       case TYPES.INTEGER:
-        markup = String(expression.value);
+        markup = `<span class="math-number">${expression.value}</span>`;
         break;
       case TYPES.NEG:
         markup = `-${renderVisual(expression.child, ownPrecedence)}`;
@@ -176,7 +176,7 @@
         break;
       }
       case TYPES.DIV:
-        markup = `${renderVisual(expression.numerator, ownPrecedence)} / ${renderVisual(expression.denominator, ownPrecedence + 1)}`;
+        markup = `<span class="math-fraction"><span class="math-numerator">${renderVisual(expression.numerator)}</span><span class="math-denominator">${renderVisual(expression.denominator)}</span></span>`;
         break;
       case TYPES.POW:
         markup = `<span class="math-power"><span>${renderVisual(expression.base, ownPrecedence)}</span><sup>${renderVisual(expression.exponent)}</sup></span>`;
