@@ -85,6 +85,11 @@ h1 { margin: 0; font-size: 30px; line-height: 1; }
   white-space: nowrap;
 }
 .base-formula sup { font-size: 0.7em; }
+.math-power { display: inline-flex; align-items: flex-start; white-space: nowrap; }
+.math-power sup { margin-left: 1px; font-size: 0.68em; line-height: 1; }
+.math-root { display: inline-flex; align-items: flex-start; white-space: nowrap; }
+.math-root-sign { font-size: 1.2em; line-height: 0.95; }
+.math-radicand { margin-left: -1px; padding: 0 2px 1px; border-top: 1.4px solid currentColor; line-height: 0.95; }
 h2 { margin: 0; font-size: 17px; }
 h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 

@@ -773,6 +773,14 @@ test("回归：嵌套 e^(ln(ln(√2)) + ln(√2)) 化简为 √2 的 √2 次方
   assert.ok(result.steps.some((step) => step.ruleId === "EXP_PRODUCT_LN"));
 });
 
+test("视觉数学渲染使用真正的上标与根式横线", () => {
+  const expression = Expr.pow(Expr.sqrt(Expr.integer(2)), Expr.sqrt(Expr.integer(2)));
+  const markup = Expr.renderVisual(expression);
+  assert.match(markup, /<sup>/);
+  assert.match(markup, /math-radicand/);
+  assert.equal(markup.includes("^(") , false);
+});
+
 test("sin 表达式支持符号显示、近似计算和保存校验", () => {
   const expression = Expr.sin(Expr.ONE);
   assert.equal(Expr.render(expression), "sin(1)");

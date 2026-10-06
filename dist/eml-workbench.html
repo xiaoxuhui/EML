@@ -93,6 +93,11 @@ h1 { margin: 0; font-size: 30px; line-height: 1; }
   white-space: nowrap;
 }
 .base-formula sup { font-size: 0.7em; }
+.math-power { display: inline-flex; align-items: flex-start; white-space: nowrap; }
+.math-power sup { margin-left: 1px; font-size: 0.68em; line-height: 1; }
+.math-root { display: inline-flex; align-items: flex-start; white-space: nowrap; }
+.math-root-sign { font-size: 1.2em; line-height: 0.95; }
+.math-radicand { margin-left: -1px; padding: 0 2px 1px; border-top: 1.4px solid currentColor; line-height: 0.95; }
 h2 { margin: 0; font-size: 17px; }
 h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 
@@ -634,6 +639,55 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return ownPrecedence < parentPrecedence ? `(${text})` : text;
   }
 
+  function renderVisual(expression, parentPrecedence = 0) {
+    const ownPrecedence = precedence(expression);
+    let markup;
+    switch (expression.type) {
+      case TYPES.CONSTANT:
+        markup = expression.name === "pi" ? "π" : expression.name;
+        break;
+      case TYPES.INTEGER:
+        markup = String(expression.value);
+        break;
+      case TYPES.NEG:
+        markup = `-${renderVisual(expression.child, ownPrecedence)}`;
+        break;
+      case TYPES.ADD:
+        markup = `${renderVisual(expression.left, ownPrecedence)} + ${renderVisual(expression.right, ownPrecedence)}`;
+        break;
+      case TYPES.SUB:
+        markup = `${renderVisual(expression.left, ownPrecedence)} - ${renderVisual(expression.right, ownPrecedence + 1)}`;
+        break;
+      case TYPES.MUL: {
+        const compact = [expression.left, expression.right].every((part) =>
+          [TYPES.CONSTANT, TYPES.INTEGER].includes(part.type)
+        );
+        markup = compact
+          ? `${renderVisual(expression.left, ownPrecedence)}${renderVisual(expression.right, ownPrecedence)}`
+          : `${renderVisual(expression.left, ownPrecedence)} × ${renderVisual(expression.right, ownPrecedence)}`;
+        break;
+      }
+      case TYPES.DIV:
+        markup = `${renderVisual(expression.numerator, ownPrecedence)} / ${renderVisual(expression.denominator, ownPrecedence + 1)}`;
+        break;
+      case TYPES.POW:
+        markup = `<span class="math-power"><span>${renderVisual(expression.base, ownPrecedence)}</span><sup>${renderVisual(expression.exponent)}</sup></span>`;
+        break;
+      case TYPES.LN:
+        markup = `ln(${renderVisual(expression.argument)})`;
+        break;
+      case TYPES.SQRT:
+        markup = `<span class="math-root"><span class="math-root-sign">√</span><span class="math-radicand">${renderVisual(expression.argument)}</span></span>`;
+        break;
+      case TYPES.SIN:
+        markup = `sin(${renderVisual(expression.argument)})`;
+        break;
+      default:
+        throw new Error(`未知表达式类型：${expression.type}`);
+    }
+    return ownPrecedence < parentPrecedence ? `(${markup})` : markup;
+  }
+
   function approximate(expression) {
     const make = (re, im = 0) => ({ re, im });
     const addComplex = (a, b) => make(a.re + b.re, a.im + b.im);
@@ -798,6 +852,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     isInteger,
     isConstant,
     render,
+    renderVisual,
     approximate,
     isValidExpression,
     validateExpression,
@@ -3503,6 +3558,15 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     return valueId ? state.values[valueId] : null;
   }
 
+  function setMath(element, expression, fallbackText) {
+    if (!expression) {
+      element.textContent = fallbackText;
+      return;
+    }
+    element.innerHTML = Expr.renderVisual(expression);
+    element.setAttribute("aria-label", fallbackText || Expr.render(expression));
+  }
+
   function recomputePreview() {
     const x = currentValue(state.inputXId);
     const y = currentValue(state.inputYId);
@@ -3510,7 +3574,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   }
 
   function renderSlot(element, value, placeholder) {
-    element.textContent = value ? value.displayText : placeholder;
+    setMath(element, value?.canonicalExpression, value ? value.displayText : placeholder);
     element.classList.toggle("filled", Boolean(value));
     element.title = value ? value.displayText : `${placeholder} 输入位置`;
   }
@@ -3535,13 +3599,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     }
 
     if (preview.limitReached) {
-      elements.result.textContent = preview.displayText;
+      setMath(elements.result, preview.resultExpression, preview.displayText);
       elements.directPreview.textContent = "化简达到安全上限，当前结果尚不能添加。";
       elements.add.disabled = true;
       return;
     }
 
-    elements.result.textContent = preview.displayText;
+    setMath(elements.result, preview.resultExpression, preview.displayText);
     elements.directPreview.textContent = preview.directFormula;
     elements.add.disabled = false;
   }
@@ -3751,7 +3815,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       result.className = "result-slot";
       const inputs = custom.inputValueIds.map(currentValue);
       const evaluation = inputs.some((value) => !value) ? null : Composition.evaluate(definition, inputs.map((value) => value.canonicalExpression), definitions);
-      result.textContent = !evaluation ? "?" : !evaluation.ok ? "未定义" : evaluation.displayText;
+      setMath(result, evaluation?.resultExpression, !evaluation ? "?" : !evaluation.ok ? "未定义" : evaluation.displayText);
       result.classList.toggle("error", Boolean(evaluation && (!evaluation.ok || evaluation.limitReached)));
       line.appendChild(result);
       const add = document.createElement("button");
@@ -3833,7 +3897,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       const button = document.createElement("button");
       button.type = "button";
       button.className = "value-button";
-      button.textContent = value.displayText;
+      setMath(button, value.canonicalExpression, value.displayText);
       button.title = value.protected ? `${value.displayText}（初始值，不可删除）` : value.displayText;
       button.draggable = false;
       button.setAttribute("aria-pressed", String(state.selectedValueId === valueId));
@@ -4100,7 +4164,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     elements.calculationTree.replaceChildren();
     if (!details) return;
 
-    elements.selectedValue.textContent = details.value.displayText;
+    setMath(elements.selectedValue, details.value.canonicalExpression, details.value.displayText);
     if (details.directFormulas.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty-formulas";

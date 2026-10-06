@@ -147,6 +147,55 @@
     return ownPrecedence < parentPrecedence ? `(${text})` : text;
   }
 
+  function renderVisual(expression, parentPrecedence = 0) {
+    const ownPrecedence = precedence(expression);
+    let markup;
+    switch (expression.type) {
+      case TYPES.CONSTANT:
+        markup = expression.name === "pi" ? "π" : expression.name;
+        break;
+      case TYPES.INTEGER:
+        markup = String(expression.value);
+        break;
+      case TYPES.NEG:
+        markup = `-${renderVisual(expression.child, ownPrecedence)}`;
+        break;
+      case TYPES.ADD:
+        markup = `${renderVisual(expression.left, ownPrecedence)} + ${renderVisual(expression.right, ownPrecedence)}`;
+        break;
+      case TYPES.SUB:
+        markup = `${renderVisual(expression.left, ownPrecedence)} - ${renderVisual(expression.right, ownPrecedence + 1)}`;
+        break;
+      case TYPES.MUL: {
+        const compact = [expression.left, expression.right].every((part) =>
+          [TYPES.CONSTANT, TYPES.INTEGER].includes(part.type)
+        );
+        markup = compact
+          ? `${renderVisual(expression.left, ownPrecedence)}${renderVisual(expression.right, ownPrecedence)}`
+          : `${renderVisual(expression.left, ownPrecedence)} × ${renderVisual(expression.right, ownPrecedence)}`;
+        break;
+      }
+      case TYPES.DIV:
+        markup = `${renderVisual(expression.numerator, ownPrecedence)} / ${renderVisual(expression.denominator, ownPrecedence + 1)}`;
+        break;
+      case TYPES.POW:
+        markup = `<span class="math-power"><span>${renderVisual(expression.base, ownPrecedence)}</span><sup>${renderVisual(expression.exponent)}</sup></span>`;
+        break;
+      case TYPES.LN:
+        markup = `ln(${renderVisual(expression.argument)})`;
+        break;
+      case TYPES.SQRT:
+        markup = `<span class="math-root"><span class="math-root-sign">√</span><span class="math-radicand">${renderVisual(expression.argument)}</span></span>`;
+        break;
+      case TYPES.SIN:
+        markup = `sin(${renderVisual(expression.argument)})`;
+        break;
+      default:
+        throw new Error(`未知表达式类型：${expression.type}`);
+    }
+    return ownPrecedence < parentPrecedence ? `(${markup})` : markup;
+  }
+
   function approximate(expression) {
     const make = (re, im = 0) => ({ re, im });
     const addComplex = (a, b) => make(a.re + b.re, a.im + b.im);
@@ -311,6 +360,7 @@
     isInteger,
     isConstant,
     render,
+    renderVisual,
     approximate,
     isValidExpression,
     validateExpression,

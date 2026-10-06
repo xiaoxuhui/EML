@@ -121,6 +121,15 @@
     return valueId ? state.values[valueId] : null;
   }
 
+  function setMath(element, expression, fallbackText) {
+    if (!expression) {
+      element.textContent = fallbackText;
+      return;
+    }
+    element.innerHTML = Expr.renderVisual(expression);
+    element.setAttribute("aria-label", fallbackText || Expr.render(expression));
+  }
+
   function recomputePreview() {
     const x = currentValue(state.inputXId);
     const y = currentValue(state.inputYId);
@@ -128,7 +137,7 @@
   }
 
   function renderSlot(element, value, placeholder) {
-    element.textContent = value ? value.displayText : placeholder;
+    setMath(element, value?.canonicalExpression, value ? value.displayText : placeholder);
     element.classList.toggle("filled", Boolean(value));
     element.title = value ? value.displayText : `${placeholder} 输入位置`;
   }
@@ -153,13 +162,13 @@
     }
 
     if (preview.limitReached) {
-      elements.result.textContent = preview.displayText;
+      setMath(elements.result, preview.resultExpression, preview.displayText);
       elements.directPreview.textContent = "化简达到安全上限，当前结果尚不能添加。";
       elements.add.disabled = true;
       return;
     }
 
-    elements.result.textContent = preview.displayText;
+    setMath(elements.result, preview.resultExpression, preview.displayText);
     elements.directPreview.textContent = preview.directFormula;
     elements.add.disabled = false;
   }
@@ -369,7 +378,7 @@
       result.className = "result-slot";
       const inputs = custom.inputValueIds.map(currentValue);
       const evaluation = inputs.some((value) => !value) ? null : Composition.evaluate(definition, inputs.map((value) => value.canonicalExpression), definitions);
-      result.textContent = !evaluation ? "?" : !evaluation.ok ? "未定义" : evaluation.displayText;
+      setMath(result, evaluation?.resultExpression, !evaluation ? "?" : !evaluation.ok ? "未定义" : evaluation.displayText);
       result.classList.toggle("error", Boolean(evaluation && (!evaluation.ok || evaluation.limitReached)));
       line.appendChild(result);
       const add = document.createElement("button");
@@ -451,7 +460,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "value-button";
-      button.textContent = value.displayText;
+      setMath(button, value.canonicalExpression, value.displayText);
       button.title = value.protected ? `${value.displayText}（初始值，不可删除）` : value.displayText;
       button.draggable = false;
       button.setAttribute("aria-pressed", String(state.selectedValueId === valueId));
@@ -718,7 +727,7 @@
     elements.calculationTree.replaceChildren();
     if (!details) return;
 
-    elements.selectedValue.textContent = details.value.displayText;
+    setMath(elements.selectedValue, details.value.canonicalExpression, details.value.displayText);
     if (details.directFormulas.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty-formulas";
