@@ -20,6 +20,7 @@
     { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
     { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
     { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
+    { id: "EXP_PRODUCT_LN", label: "e^(a × ln(b)) = b^a（形式化规则）" },
     { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
     { id: "EXP_HALF", label: "e^(1 / 2) = √(e)" },
     { id: "EXP_HALF_LN", label: "e^(ln(a) / 2) = √(a)（形式化规则）" },
@@ -155,6 +156,17 @@
           expression: mul(expression.exponent.left.argument, expression.exponent.right.argument),
           ruleId: "EXP_ADD_LN",
         };
+      }
+      if (expression.exponent.type === TYPES.MUL) {
+        const logarithm = expression.exponent.left.type === TYPES.LN
+          ? expression.exponent.left
+          : expression.exponent.right.type === TYPES.LN ? expression.exponent.right : null;
+        if (logarithm && isProvablyNonZero(logarithm.argument)) {
+          const other = logarithm === expression.exponent.left
+            ? expression.exponent.right
+            : expression.exponent.left;
+          return { expression: pow(logarithm.argument, other), ruleId: "EXP_PRODUCT_LN" };
+        }
       }
       if (expression.exponent.type === TYPES.ADD) {
         const logarithm = expression.exponent.left.type === TYPES.LN

@@ -891,6 +891,11 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         ];
         return { lower: Math.min(...quotients), upper: Math.max(...quotients) };
       }
+      case TYPES.SQRT: {
+        const argument = realBounds(expression.argument);
+        if (!argument || argument.lower < 0) return null;
+        return { lower: Math.sqrt(argument.lower), upper: Math.sqrt(argument.upper) };
+      }
       default:
         return null;
     }
@@ -917,7 +922,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         (isConstant(expression.right, "i") && isProvablyNonZero(expression.left))
       );
     }
-    return false;
+    const bounds = realBounds(expression);
+    return Boolean(bounds && (bounds.upper < 1 || bounds.lower > 1));
   }
 
   function isProvablyPureImaginaryNonZero(expression) {
@@ -1037,6 +1043,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
     { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
     { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
+    { id: "EXP_PRODUCT_LN", label: "e^(a × ln(b)) = b^a（形式化规则）" },
     { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
     { id: "EXP_HALF", label: "e^(1 / 2) = √(e)" },
     { id: "EXP_HALF_LN", label: "e^(ln(a) / 2) = √(a)（形式化规则）" },
@@ -1172,6 +1179,17 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           expression: mul(expression.exponent.left.argument, expression.exponent.right.argument),
           ruleId: "EXP_ADD_LN",
         };
+      }
+      if (expression.exponent.type === TYPES.MUL) {
+        const logarithm = expression.exponent.left.type === TYPES.LN
+          ? expression.exponent.left
+          : expression.exponent.right.type === TYPES.LN ? expression.exponent.right : null;
+        if (logarithm && isProvablyNonZero(logarithm.argument)) {
+          const other = logarithm === expression.exponent.left
+            ? expression.exponent.right
+            : expression.exponent.left;
+          return { expression: pow(logarithm.argument, other), ruleId: "EXP_PRODUCT_LN" };
+        }
       }
       if (expression.exponent.type === TYPES.ADD) {
         const logarithm = expression.exponent.left.type === TYPES.LN

@@ -5,10 +5,10 @@ const Rules = require("../src/formula-rules.js");
 
 test("规则注册表按领域拆分且编号唯一", () => {
   assert.deepEqual(Rules.registries.map((registry) => registry.name), ["transcendental", "algebra"]);
-  assert.equal(Rules.rules.length, 73);
+  assert.equal(Rules.rules.length, 74);
   assert.equal(new Set(Rules.rules.map((rule) => rule.id)).size, Rules.rules.length);
   // 分领域计数：加规则时两处都要动，避免「只在总表里悄悄加了一条」。
-  assert.equal(Rules.registries[0].ruleIds.length, 24);
+  assert.equal(Rules.registries[0].ruleIds.length, 25);
   assert.equal(Rules.registries[1].ruleIds.length, 49);
 });
 

@@ -761,6 +761,18 @@ test("回归：e^(i - ln(2) - i × (1 - π / 2)) 化简为 i / 2", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "SUB_I_UNIT_PRODUCT"));
 });
 
+test("回归：嵌套 e^(ln(ln(√2)) + ln(√2)) 化简为 √2 的 √2 次方", () => {
+  const squareRootOfTwo = Expr.sqrt(Expr.integer(2));
+  const expression = Expr.pow(
+    Expr.E,
+    Expr.pow(Expr.E, Expr.add(Expr.ln(Expr.ln(squareRootOfTwo)), Expr.ln(squareRootOfTwo)))
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "√(2)^(√(2))");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_ADD_LN"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_PRODUCT_LN"));
+});
+
 test("sin 表达式支持符号显示、近似计算和保存校验", () => {
   const expression = Expr.sin(Expr.ONE);
   assert.equal(Expr.render(expression), "sin(1)");

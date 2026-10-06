@@ -83,6 +83,11 @@
         ];
         return { lower: Math.min(...quotients), upper: Math.max(...quotients) };
       }
+      case TYPES.SQRT: {
+        const argument = realBounds(expression.argument);
+        if (!argument || argument.lower < 0) return null;
+        return { lower: Math.sqrt(argument.lower), upper: Math.sqrt(argument.upper) };
+      }
       default:
         return null;
     }
@@ -109,7 +114,8 @@
         (isConstant(expression.right, "i") && isProvablyNonZero(expression.left))
       );
     }
-    return false;
+    const bounds = realBounds(expression);
+    return Boolean(bounds && (bounds.upper < 1 || bounds.lower > 1));
   }
 
   function isProvablyPureImaginaryNonZero(expression) {
