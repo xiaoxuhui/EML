@@ -102,6 +102,17 @@ test("指数中的 ππ 先合并为 π²", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "MUL_SELF_POWER"));
 });
 
+test("整数因子置左使嵌套指数显示为 e 的 -2π 次方", () => {
+  const innerExponent = Expr.add(
+    Expr.ln(Expr.mul(Expr.PI, Expr.integer(2))),
+    Expr.mul(Expr.I, Expr.PI)
+  );
+  const expression = Expr.pow(Expr.E, Expr.pow(Expr.E, innerExponent));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "e^(-2π)");
+  assert.ok(result.steps.some((step) => step.ruleId === "MUL_INTEGER_LEFT"));
+});
+
 test("对数可识别欧拉展开式及其同分母缩放形式", () => {
   const euler = Expr.add(Expr.cos(Expr.ONE), Expr.mul(Expr.I, Expr.sin(Expr.ONE)));
   const scaledEuler = Expr.add(
@@ -114,7 +125,7 @@ test("对数可识别欧拉展开式及其同分母缩放形式", () => {
 
 test("正实数对数之和可合并为乘积对数", () => {
   const result = Rules.simplify(Expr.add(Expr.ln(Expr.PI), Expr.ln(Expr.integer(2))));
-  assert.equal(Expr.render(result.expression), "ln(π2)");
+  assert.equal(Expr.render(result.expression), "ln(2π)");
   assert.ok(result.steps.some((step) => step.ruleId === "LN_PRODUCT_POSITIVE"));
 });
 

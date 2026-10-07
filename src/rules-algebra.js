@@ -47,6 +47,7 @@
     { id: "MUL_ONE", label: "a × 1 = a" },
     { id: "MUL_ZERO", label: "a × 0 = 0" },
     { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
+    { id: "MUL_INTEGER_LEFT", label: "a × n = n × a" },
     { id: "I_SQUARED", label: "i × i = -1" },
     { id: "MUL_SELF_POWER", label: "a × a = a^2" },
     { id: "MUL_IMAGINARY_FACTORS", label: "(ia)(ib) = -ab" },
@@ -486,6 +487,12 @@
       }
       if (isInteger(expression.left, 0) || isInteger(expression.right, 0)) {
         return { expression: ZERO, ruleId: "MUL_ZERO" };
+      }
+      if (
+        expression.right.type === TYPES.INTEGER && expression.right.value > 1 &&
+        expression.left.type !== TYPES.INTEGER
+      ) {
+        return { expression: mul(expression.right, expression.left), ruleId: "MUL_INTEGER_LEFT" };
       }
       if (isConstant(expression.left, "i") && isConstant(expression.right, "i")) {
         return { expression: integer(-1), ruleId: "I_SQUARED" };
