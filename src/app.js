@@ -2,6 +2,7 @@
   "use strict";
 
   const Expr = root.EMLExpression;
+  const FormulaRules = root.EMLFormulaRules;
   const Evaluator = root.EMLEvaluator;
   const Store = root.EMLValueStore;
   const Persistence = root.EMLPersistence;
@@ -53,6 +54,9 @@
   const undoHistory = [];
   const MAX_UNDO_HISTORY = 100;
   let customDefinitionError = "";
+  // 存档保留当时的公式与结果；界面和新计算采用当前规则的只读化简视图。
+  // 这样规则升级立即生效，又不会在加载时改写用户的本地存档。
+  const presentationCache = new Map();
   let definitionDraft = { body: null, selectedPath: "root", pendingSource: null };
   let editingFunctionId = null;
   let pointerDrag = null;
@@ -121,6 +125,23 @@
     return valueId ? state.values[valueId] : null;
   }
 
+  function presentationFor(value) {
+    if (!value?.canonicalExpression || !FormulaRules) return {
+      expression: value?.canonicalExpression || null,
+      displayText: value?.displayText || "",
+    };
+    const cached = presentationCache.get(value.id);
+    if (cached?.canonicalKey === value.canonicalKey) return cached;
+    const simplified = FormulaRules.simplify(value.canonicalExpression);
+    const presentation = {
+      canonicalKey: value.canonicalKey,
+      expression: simplified.limitReached ? value.canonicalExpression : simplified.expression,
+      displayText: simplified.limitReached ? value.displayText : Expr.render(simplified.expression),
+    };
+    presentationCache.set(value.id, presentation);
+    return presentation;
+  }
+
   function setMath(element, expression, fallbackText) {
     if (!expression) {
       element.textContent = fallbackText;
@@ -138,13 +159,14 @@
   function recomputePreview() {
     const x = currentValue(state.inputXId);
     const y = currentValue(state.inputYId);
-    preview = x && y ? Evaluator.evaluateEML(x.canonicalExpression, y.canonicalExpression) : null;
+    preview = x && y ? Evaluator.evaluateEML(presentationFor(x).expression, presentationFor(y).expression) : null;
   }
 
   function renderSlot(element, value, placeholder) {
-    setMath(element, value?.canonicalExpression, value ? value.displayText : placeholder);
+    const presentation = presentationFor(value);
+    setMath(element, presentation.expression, value ? presentation.displayText : placeholder);
     element.classList.toggle("filled", Boolean(value));
-    element.title = value ? value.displayText : `${placeholder} 输入位置`;
+    element.title = value ? presentation.displayText : `${placeholder} 输入位置`;
   }
 
   function renderCalculator() {
@@ -333,7 +355,14 @@
     elements.definitionValueSources.replaceChildren();
     state.valueOrder.forEach((valueId) => {
       const value = state.values[valueId];
-      if (value) elements.definitionValueSources.appendChild(definitionSource("value", value.displayText, { expression: value.canonicalExpression, displayText: value.displayText, valueId }));
+      if (value) {
+        const presentation = presentationFor(value);
+        elements.definitionValueSources.appendChild(definitionSource("value", presentation.displayText, {
+          expression: presentation.expression,
+          displayText: presentation.displayText,
+          valueId,
+        }));
+      }
     });
   }
 
@@ -382,7 +411,9 @@
       const result = document.createElement("output");
       result.className = "result-slot";
       const inputs = custom.inputValueIds.map(currentValue);
-      const evaluation = inputs.some((value) => !value) ? null : Composition.evaluate(definition, inputs.map((value) => value.canonicalExpression), definitions);
+      const evaluation = inputs.some((value) => !value)
+        ? null
+        : Composition.evaluate(definition, inputs.map((value) => presentationFor(value).expression), definitions);
       setMath(result, evaluation?.resultExpression, !evaluation ? "?" : !evaluation.ok ? "未定义" : evaluation.displayText);
       result.classList.toggle("error", Boolean(evaluation && (!evaluation.ok || evaluation.limitReached)));
       line.appendChild(result);
@@ -465,8 +496,9 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "value-button";
-      setMath(button, value.canonicalExpression, value.displayText);
-      button.title = value.protected ? `${value.displayText}（初始值，不可删除）` : value.displayText;
+      const presentation = presentationFor(value);
+      setMath(button, presentation.expression, presentation.displayText);
+      button.title = value.protected ? `${presentation.displayText}（初始值，不可删除）` : presentation.displayText;
       button.draggable = false;
       button.setAttribute("aria-pressed", String(state.selectedValueId === valueId));
       button.addEventListener("click", () => {
@@ -503,7 +535,12 @@
         suppressValueClick = true;
         const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
         if (target?.classList.contains("definition-slot")) {
-          applyDefinitionSource({ kind: "value", payload: { expression: value.canonicalExpression, displayText: value.displayText, valueId } }, target.dataset.definitionPath);
+          const presentation = presentationFor(value);
+          applyDefinitionSource({ kind: "value", payload: {
+            expression: presentation.expression,
+            displayText: presentation.displayText,
+            valueId,
+          } }, target.dataset.definitionPath);
         } else if (target) assignInput(target.dataset.slot, drag.valueId);
       });
 
@@ -732,7 +769,8 @@
     elements.calculationTree.replaceChildren();
     if (!details) return;
 
-    setMath(elements.selectedValue, details.value.canonicalExpression, details.value.displayText);
+    const presentation = presentationFor(details.value);
+    setMath(elements.selectedValue, presentation.expression, presentation.displayText);
     if (details.directFormulas.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty-formulas";
