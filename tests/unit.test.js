@@ -670,6 +670,18 @@ test("回归：2 / -i 化简为 2i", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "DIV_NEG_I"));
 });
 
+test("根式分母有理化：1 / √2 化简为 √2 / 2", () => {
+  const result = Rules.simplify(Expr.div(Expr.ONE, Expr.sqrt(Expr.integer(2))));
+  assert.equal(Expr.render(result.expression), "√(2) / 2");
+  assert.ok(result.steps.some((step) => step.ruleId === "DIV_RATIONALIZE_SQRT"));
+});
+
+test("根式分母有理化不改写 √0 分母", () => {
+  const result = Rules.simplify(Expr.div(Expr.ONE, Expr.sqrt(Expr.ZERO)));
+  assert.equal(Expr.render(result.expression), "1 / √(0)");
+  assert.equal(result.steps.some((step) => step.ruleId === "DIV_RATIONALIZE_SQRT"), false);
+});
+
 test("纯虚数系数归一化让嵌套 i 乘 i 和减负数可继续化简", () => {
   const product = Rules.simplify(Expr.mul(Expr.div(Expr.I, Expr.integer(2)), Expr.I));
   assert.equal(Expr.render(product.expression), "-1 / 2");

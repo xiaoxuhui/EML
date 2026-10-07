@@ -54,6 +54,7 @@
     { id: "SUB_I_UNIT_PRODUCT", label: "(i - a) - i(1 - b) = ib - a" },
     { id: "DIV_ONE", label: "a / 1 = a" },
     { id: "DIV_SELF", label: "a / a = 1（a ≠ 0）" },
+    { id: "DIV_RATIONALIZE_SQRT", label: "a / √b = a√b / b（b ≠ 0）" },
     { id: "DIV_COMMON_FACTOR_CANCEL", label: "分子分母的公共非零因子约分" },
     { id: "DIV_I", label: "a / i = -ai" },
     { id: "DIV_NEG_I", label: "a / (-i) = ai" },
@@ -490,6 +491,18 @@
       if (isInteger(expression.denominator, 1)) return { expression: expression.numerator, ruleId: "DIV_ONE" };
       if (isSame(expression.numerator, expression.denominator) && isProvablyNonZero(expression.numerator)) {
         return { expression: ONE, ruleId: "DIV_SELF" };
+      }
+      if (
+        expression.denominator.type === TYPES.SQRT &&
+        isProvablyNonZero(expression.denominator.argument)
+      ) {
+        return {
+          expression: Expr.div(
+            mul(expression.numerator, expression.denominator),
+            expression.denominator.argument
+          ),
+          ruleId: "DIV_RATIONALIZE_SQRT",
+        };
       }
       const reducedProduct = cancelCommonProductFactors(expression.numerator, expression.denominator);
       if (reducedProduct) return { expression: reducedProduct, ruleId: "DIV_COMMON_FACTOR_CANCEL" };
