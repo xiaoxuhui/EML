@@ -95,6 +95,32 @@ test("欧拉公式：e^(2iπ) 经三角函数化简为 1", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "SIN_INTEGER_PI"));
 });
 
+test("对数可识别欧拉展开式及其同分母缩放形式", () => {
+  const euler = Expr.add(Expr.cos(Expr.ONE), Expr.mul(Expr.I, Expr.sin(Expr.ONE)));
+  const scaledEuler = Expr.add(
+    Expr.div(Expr.cos(Expr.ONE), Expr.integer(2)),
+    Expr.div(Expr.mul(Expr.I, Expr.sin(Expr.ONE)), Expr.integer(2))
+  );
+  assert.equal(Expr.render(Rules.simplify(Expr.ln(euler)).expression), "i");
+  assert.equal(Expr.render(Rules.simplify(Expr.ln(scaledEuler)).expression), "i - ln(2)");
+});
+
+test("回归：嵌套欧拉展开与对数可化简为 1", () => {
+  const euler = Expr.add(Expr.cos(Expr.ONE), Expr.mul(Expr.I, Expr.sin(Expr.ONE)));
+  const scaledEuler = Expr.add(
+    Expr.div(Expr.cos(Expr.ONE), Expr.integer(2)),
+    Expr.div(Expr.mul(Expr.I, Expr.sin(Expr.ONE)), Expr.integer(2))
+  );
+  const exponent = Expr.sub(
+    Expr.sub(Expr.I, Expr.sub(Expr.sub(Expr.I, Expr.ln(Expr.mul(Expr.I, Expr.PI))), Expr.ln(euler))),
+    Expr.ln(scaledEuler)
+  );
+  const result = Rules.simplify(Expr.pow(Expr.E, Expr.pow(Expr.E, exponent)));
+  assert.equal(Expr.render(result.expression), "1");
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_EULER_FORMAL"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_FORMULA"));
+});
+
 test("U05 π 和 ln 保持符号形式", () => {
   const result = evaluate(Expr.PI, Expr.ln(Expr.integer(2)));
   assert.equal(result.displayText, "e^(π) - ln(ln(2))");

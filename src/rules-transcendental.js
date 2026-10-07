@@ -40,6 +40,7 @@
     { id: "LN_E", label: "ln(e) = 1" },
     { id: "LN_SQRT_E", label: "ln(√(e)) = 1 / 2" },
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
+    { id: "LN_EULER_FORMAL", label: "ln((cos(θ) + i sin(θ)) / b) = iθ - ln(b)（形式化规则）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "LN_I", label: "ln(i) = iπ / 2（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
@@ -172,6 +173,41 @@
       : null;
   }
 
+  function eulerAngle(expression) {
+    if (expression.type !== TYPES.ADD) return null;
+    const candidates = [
+      [expression.left, expression.right],
+      [expression.right, expression.left],
+    ];
+    for (const [cosine, imaginarySine] of candidates) {
+      if (cosine.type !== TYPES.COS || imaginarySine.type !== TYPES.MUL) continue;
+      const sine = isConstant(imaginarySine.left, "i") && imaginarySine.right.type === TYPES.SIN
+        ? imaginarySine.right
+        : isConstant(imaginarySine.right, "i") && imaginarySine.left.type === TYPES.SIN
+          ? imaginarySine.left
+          : null;
+      if (sine && isSame(cosine.argument, sine.argument)) return cosine.argument;
+    }
+    return null;
+  }
+
+  function eulerForm(expression) {
+    const angle = eulerAngle(expression);
+    if (angle) return { angle, denominator: ONE };
+    if (expression.type === TYPES.DIV) {
+      const numeratorAngle = eulerAngle(expression.numerator);
+      return numeratorAngle ? { angle: numeratorAngle, denominator: expression.denominator } : null;
+    }
+    if (
+      expression.type === TYPES.ADD && expression.left.type === TYPES.DIV && expression.right.type === TYPES.DIV &&
+      isSame(expression.left.denominator, expression.right.denominator)
+    ) {
+      const numeratorAngle = eulerAngle(Expr.add(expression.left.numerator, expression.right.numerator));
+      return numeratorAngle ? { angle: numeratorAngle, denominator: expression.left.denominator } : null;
+    }
+    return null;
+  }
+
   function rewrite(expression) {
     if (expression.type === TYPES.POW && isConstant(expression.base, "e")) {
       if (isInteger(expression.exponent, 0)) return { expression: ONE, ruleId: "EXP_ZERO" };
@@ -272,6 +308,16 @@
       }
       if (expression.argument.type === TYPES.POW && isConstant(expression.argument.base, "e")) {
         return { expression: expression.argument.exponent, ruleId: "LN_EXP_FORMAL" };
+      }
+      const polarForm = eulerForm(expression.argument);
+      if (polarForm && isProvablyNonZero(polarForm.denominator)) {
+        const imaginaryAngle = mul(I, polarForm.angle);
+        return {
+          expression: isInteger(polarForm.denominator, 1)
+            ? imaginaryAngle
+            : sub(imaginaryAngle, Expr.ln(polarForm.denominator)),
+          ruleId: "LN_EULER_FORMAL",
+        };
       }
       if (expression.argument.type === TYPES.MUL) {
         const exponential = expression.argument.left.type === TYPES.POW &&
