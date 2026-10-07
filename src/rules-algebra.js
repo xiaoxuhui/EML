@@ -28,6 +28,7 @@
     { id: "ADD_SAME_HALF", label: "a / 2 + a / 2 = a" },
     { id: "ADD_SUB_TERM_CANCEL", label: "加减式中的同项抵消" },
     { id: "ADD_IMAGINARY_COEFFICIENT", label: "ia + ib = i(a + b)" },
+    { id: "ADD_COLLECT_IMAGINARY_TERMS", label: "加减式中收集纯虚项" },
     { id: "SUB_ZERO", label: "a - 0 = a" },
     { id: "SUB_SELF", label: "a - a = 0" },
     { id: "SUB_NESTED_LEFT", label: "a - (a - b) = b" },
@@ -166,6 +167,48 @@
     return rebuilt;
   }
 
+  function collectImaginaryTerms(expression) {
+    const terms = [];
+    const collect = (node, sign) => {
+      if (node.type === TYPES.ADD) {
+        collect(node.left, sign);
+        collect(node.right, sign);
+      } else if (node.type === TYPES.SUB) {
+        collect(node.left, sign);
+        collect(node.right, -sign);
+      } else if (node.type === TYPES.NEG) {
+        collect(node.child, -sign);
+      } else {
+        terms.push({ expression: node, sign });
+      }
+    };
+    collect(expression, 1);
+
+    const imaginaryTerms = [];
+    const remaining = [];
+    for (const term of terms) {
+      const coefficient = imaginaryCoefficient(term.expression);
+      if (coefficient) imaginaryTerms.push({ ...term, coefficient });
+      else remaining.push(term);
+    }
+    if (imaginaryTerms.length < 2) return null;
+    let coefficient = imaginaryTerms[0].sign > 0
+      ? imaginaryTerms[0].coefficient
+      : neg(imaginaryTerms[0].coefficient);
+    for (const term of imaginaryTerms.slice(1)) {
+      coefficient = term.sign > 0
+        ? add(coefficient, term.coefficient)
+        : sub(coefficient, term.coefficient);
+    }
+    remaining.push({ expression: mul(I, coefficient), sign: 1 });
+
+    let rebuilt = remaining[0].sign > 0 ? remaining[0].expression : neg(remaining[0].expression);
+    for (const term of remaining.slice(1)) {
+      rebuilt = term.sign > 0 ? add(rebuilt, term.expression) : sub(rebuilt, term.expression);
+    }
+    return rebuilt;
+  }
+
   function productFactors(expression) {
     if (expression.type !== TYPES.MUL) return [expression];
     return [...productFactors(expression.left), ...productFactors(expression.right)];
@@ -263,6 +306,10 @@
       ) return { expression: expression.left.left, ruleId: "ADD_SAME_HALF" };
       const cancelled = cancelAdditiveTerms(expression);
       if (cancelled) return { expression: cancelled, ruleId: "ADD_SUB_TERM_CANCEL" };
+      const collectedImaginaryTerms = collectImaginaryTerms(expression);
+      if (collectedImaginaryTerms) {
+        return { expression: collectedImaginaryTerms, ruleId: "ADD_COLLECT_IMAGINARY_TERMS" };
+      }
       const leftCoefficient = imaginaryCoefficient(expression.left);
       const rightCoefficient = imaginaryCoefficient(expression.right);
       if (leftCoefficient && rightCoefficient) {
@@ -376,6 +423,10 @@
           expression: sub(mul(I, expression.right.right.right), expression.left.right),
           ruleId: "SUB_I_UNIT_PRODUCT",
         };
+      }
+      const collectedImaginaryTerms = collectImaginaryTerms(expression);
+      if (collectedImaginaryTerms) {
+        return { expression: collectedImaginaryTerms, ruleId: "ADD_COLLECT_IMAGINARY_TERMS" };
       }
       if (
         expression.right.type === TYPES.SUB && expression.left.type === TYPES.DIV &&

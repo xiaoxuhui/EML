@@ -105,6 +105,12 @@ test("对数可识别欧拉展开式及其同分母缩放形式", () => {
   assert.equal(Expr.render(Rules.simplify(Expr.ln(scaledEuler)).expression), "i - ln(2)");
 });
 
+test("正实数对数之和可合并为乘积对数", () => {
+  const result = Rules.simplify(Expr.add(Expr.ln(Expr.PI), Expr.ln(Expr.integer(2))));
+  assert.equal(Expr.render(result.expression), "ln(π2)");
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_PRODUCT_POSITIVE"));
+});
+
 test("回归：嵌套欧拉展开与对数可化简为 1", () => {
   const euler = Expr.add(Expr.cos(Expr.ONE), Expr.mul(Expr.I, Expr.sin(Expr.ONE)));
   const scaledEuler = Expr.add(
@@ -119,6 +125,29 @@ test("回归：嵌套欧拉展开与对数可化简为 1", () => {
   assert.equal(Expr.render(result.expression), "1");
   assert.ok(result.steps.some((step) => step.ruleId === "LN_EULER_FORMAL"));
   assert.ok(result.steps.some((step) => step.ruleId === "EULER_FORMULA"));
+});
+
+test("回归：指数中的欧拉形式乘积与 iπ 对数化简为 π", () => {
+  const euler = Expr.add(Expr.cos(Expr.ONE), Expr.mul(Expr.I, Expr.sin(Expr.ONE)));
+  const exponent = Expr.sub(
+    Expr.add(Expr.I, Expr.ln(Expr.mul(Expr.I, Expr.PI))),
+    Expr.ln(Expr.mul(euler, Expr.I))
+  );
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "π");
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_EULER_PRODUCT_FORMAL"));
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_I_REAL_PRODUCT"));
+});
+
+test("加减树中夹着实数项的纯虚项仍可合并", () => {
+  const halfPi = Expr.div(Expr.PI, Expr.integer(2));
+  const expression = Expr.sub(
+    Expr.add(Expr.add(Expr.I, Expr.ln(Expr.PI)), Expr.mul(Expr.I, halfPi)),
+    Expr.mul(Expr.I, Expr.add(Expr.ONE, halfPi))
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "ln(π)");
+  assert.ok(result.steps.some((step) => step.ruleId === "ADD_COLLECT_IMAGINARY_TERMS"));
 });
 
 test("U05 π 和 ln 保持符号形式", () => {
@@ -419,12 +448,12 @@ test("基础代数组合规则审计", () => {
   }
 });
 
-test("回归：e^(ln(ln(iπ))) - ln(2) 化简为 ln(iπ / 2)", () => {
+test("回归：e^(ln(ln(iπ))) - ln(2) 保留主值对数的虚部", () => {
   const x = Expr.ln(Expr.ln(Expr.mul(Expr.I, Expr.PI)));
   const result = evaluate(x, Expr.integer(2));
-  assert.equal(result.displayText, "ln(iπ / 2)");
+  assert.equal(result.displayText, "ln(π) + iπ / 2 - ln(2)");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_QUOTIENT_POSITIVE_DENOMINATOR"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_I_REAL_PRODUCT"));
 });
 
 test("除法节点保持符号形式并支持近似计算", () => {
@@ -534,7 +563,7 @@ test("指数商对数规则对非零分母使用形式化展开", () => {
   assert.equal(Expr.render(negative.expression), "e - ln(-2)");
 
   const complex = Rules.simplify(Expr.ln(Expr.div(Expr.pow(Expr.E, Expr.E), Expr.mul(Expr.I, Expr.PI))));
-  assert.equal(Expr.render(complex.expression), "e - ln(iπ)");
+  assert.equal(Expr.render(complex.expression), "e - (ln(π) + iπ / 2)");
   assert.ok(complex.steps.some((step) => step.ruleId === "LN_EXP_QUOTIENT_FORMAL"));
 });
 
@@ -649,14 +678,14 @@ test("形式化 e^ln 规则不要求证明嵌套复数参数非零", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
 });
 
-test("回归：ln(-i) - ln(1 / (iπ)) 化简为 ln(-i) + ln(iπ)", () => {
+test("回归：ln(-i) - ln(1 / (iπ)) 展开 iπ 的主值对数", () => {
   const ipi = Expr.mul(Expr.I, Expr.PI);
   const expression = Expr.sub(
     Expr.ln(Expr.neg(Expr.I)),
     Expr.ln(Expr.div(Expr.ONE, ipi))
   );
   const result = Rules.simplify(expression);
-  assert.equal(Expr.render(result.expression), "ln(-i) + ln(iπ)");
+  assert.equal(Expr.render(result.expression), "ln(-i) + ln(π) + iπ / 2");
   assert.ok(result.steps.some((step) => step.ruleId === "LN_RECIPROCAL"));
   assert.ok(result.steps.some((step) => step.ruleId === "SUB_NEGATIVE"));
 });
@@ -675,7 +704,8 @@ test("回归：e^(ln(-i) + ln(iπ)) 化简为 π", () => {
   );
   const result = Rules.simplify(Expr.pow(Expr.E, exponent));
   assert.equal(Expr.render(result.expression), "π");
-  assert.ok(result.steps.some((step) => step.ruleId === "EXP_ADD_LN"));
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_I_REAL_PRODUCT"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_SUM_LN_FACTOR"));
   assert.ok(result.steps.some((step) => step.ruleId === "MUL_IMAGINARY_FACTORS"));
   assert.ok(result.steps.some((step) => step.ruleId === "NEG_DOUBLE"));
 });
@@ -759,7 +789,7 @@ test("纯虚数系数归一化让嵌套 i 乘 i 和减负数可继续化简", ()
   );
   assert.equal(Expr.render(difference.expression), "i × (π + 1 / 2)");
   assert.ok(difference.steps.some((step) => step.ruleId === "SUB_NEGATIVE_FRACTION"));
-  assert.ok(difference.steps.some((step) => step.ruleId === "ADD_IMAGINARY_COEFFICIENT"));
+  assert.ok(difference.steps.some((step) => step.ruleId === "ADD_COLLECT_IMAGINARY_TERMS"));
 });
 
 test("整数分数乘法继续化简双重负号", () => {
@@ -907,7 +937,7 @@ test("欧拉正弦公式不匹配错误分母", () => {
   const numerator = Expr.sub(Expr.pow(Expr.E, Expr.I), Expr.pow(Expr.E, Expr.neg(Expr.I)));
   const expression = Expr.div(numerator, Expr.integer(2));
   const result = Rules.simplify(expression);
-  assert.equal(Expr.render(result.expression), "(cos(1) + i × sin(1) - (cos(-1) + i × sin(-1))) / 2");
+  assert.equal(Expr.render(result.expression), "(cos(1) - cos(-1) + i × (sin(1) - sin(-1))) / 2");
   assert.equal(result.steps.some((step) => step.ruleId === "EULER_SINE"), false);
 });
 
@@ -960,7 +990,7 @@ test("回归：(a + b) - (a - c) 化为 b + c", () => {
     Expr.sub(Expr.I, Expr.ln(Expr.integer(3)))
   );
   const result = Rules.simplify(expression);
-  assert.equal(Expr.render(result.expression), "ln(2) + ln(3)");
+  assert.equal(Expr.render(result.expression), "ln(6)");
   assert.ok(result.steps.some((step) => step.ruleId === "SUB_ADD_SUB_SAME_LEFT"));
 });
 

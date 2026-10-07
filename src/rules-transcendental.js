@@ -41,6 +41,9 @@
     { id: "LN_SQRT_E", label: "ln(√(e)) = 1 / 2" },
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_EULER_FORMAL", label: "ln((cos(θ) + i sin(θ)) / b) = iθ - ln(b)（形式化规则）" },
+    { id: "LN_EULER_PRODUCT_FORMAL", label: "ln((cos(θ) + i sin(θ))b) = iθ + ln(b)（形式化规则）" },
+    { id: "LN_I_REAL_PRODUCT", label: "ln(ia) = ln(a) + iπ / 2（a > 0）" },
+    { id: "LN_PRODUCT_POSITIVE", label: "ln(a) + ln(b) = ln(ab)（a, b > 0）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
     { id: "LN_I", label: "ln(i) = iπ / 2（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
@@ -320,6 +323,19 @@
         };
       }
       if (expression.argument.type === TYPES.MUL) {
+        const factors = [expression.argument.left, expression.argument.right];
+        const leftPolar = eulerForm(factors[0]);
+        const rightPolar = eulerForm(factors[1]);
+        const polarFactor = leftPolar || rightPolar;
+        if (polarFactor && isInteger(polarFactor.denominator, 1)) {
+          const other = leftPolar ? factors[1] : factors[0];
+          if (isProvablyNonZero(other)) {
+            return {
+              expression: Expr.add(mul(I, polarFactor.angle), Expr.ln(other)),
+              ruleId: "LN_EULER_PRODUCT_FORMAL",
+            };
+          }
+        }
         const exponential = expression.argument.left.type === TYPES.POW &&
           isConstant(expression.argument.left.base, "e")
           ? expression.argument.left
@@ -334,6 +350,16 @@
             return {
               expression: Expr.add(exponential.exponent, Expr.ln(other)),
               ruleId: "LN_REAL_EXP_PRODUCT",
+            };
+          }
+        }
+        const imaginaryFactor = isConstant(factors[0], "i") ? factors[0] : isConstant(factors[1], "i") ? factors[1] : null;
+        if (imaginaryFactor) {
+          const other = imaginaryFactor === factors[0] ? factors[1] : factors[0];
+          if (isProvablyPositive(other)) {
+            return {
+              expression: Expr.add(Expr.ln(other), div(mul(I, PI), integer(2))),
+              ruleId: "LN_I_REAL_PRODUCT",
             };
           }
         }
@@ -378,6 +404,16 @@
       return {
         expression: Expr.ln(div(expression.left.argument, expression.right.argument)),
         ruleId: "LN_QUOTIENT_POSITIVE_DENOMINATOR",
+      };
+    }
+
+    if (
+      expression.type === TYPES.ADD && expression.left.type === TYPES.LN && expression.right.type === TYPES.LN &&
+      isProvablyPositive(expression.left.argument) && isProvablyPositive(expression.right.argument)
+    ) {
+      return {
+        expression: Expr.ln(mul(expression.left.argument, expression.right.argument)),
+        ruleId: "LN_PRODUCT_POSITIVE",
       };
     }
 
