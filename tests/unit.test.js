@@ -936,6 +936,7 @@ test("TeX 数学渲染覆盖上标、根式、分式和数学常量", () => {
   assert.match(tex, /e/);
   assert.equal(tex.includes("^("), false);
   assert.equal(Expr.renderTex(Expr.neg(Expr.pow(Expr.PI, Expr.integer(2)))), "-{\\pi}^{2}");
+  assert.equal(Expr.renderTex(Expr.div(Expr.neg(Expr.PI), Expr.integer(2))), "-\\frac{\\pi}{2}");
 });
 
 test("sin、cos 表达式支持符号显示、近似计算和保存校验", () => {

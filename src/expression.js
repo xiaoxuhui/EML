@@ -183,7 +183,9 @@
         break;
       }
       case TYPES.DIV:
-        tex = `\\frac{${renderTex(expression.numerator)}}{${renderTex(expression.denominator)}}`;
+        tex = expression.numerator.type === TYPES.NEG
+          ? `-\\frac{${renderTex(expression.numerator.child)}}{${renderTex(expression.denominator)}}`
+          : `\\frac{${renderTex(expression.numerator)}}{${renderTex(expression.denominator)}}`;
         break;
       case TYPES.POW:
         tex = `{${renderTex(expression.base, ownPrecedence)}}^{${renderTex(expression.exponent)}}`;
