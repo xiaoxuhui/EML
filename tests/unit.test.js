@@ -773,6 +773,22 @@ test("回归：嵌套 e^(ln(ln(√2)) + ln(√2)) 化简为 √2 的 √2 次方
   assert.ok(result.steps.some((step) => step.ruleId === "EXP_PRODUCT_LN"));
 });
 
+test("回归：双层指数中的 -i(1-π) 化简为外层负号", () => {
+  const logarithm = Expr.ln(Expr.ln(Expr.sqrt(Expr.integer(2))));
+  const innerExponent = Expr.add(Expr.I, logarithm);
+  const expression = Expr.pow(
+    Expr.E,
+    Expr.sub(
+      Expr.pow(Expr.E, innerExponent),
+      Expr.mul(Expr.I, Expr.sub(Expr.ONE, Expr.PI))
+    )
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "-(e^(ln(√(2)) × e^(i) - i))");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_SUM_LN_FACTOR"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_SUB_I_ONE_MINUS_PI"));
+});
+
 test("TeX 数学渲染覆盖上标、根式、分式和数学常量", () => {
   const expression = Expr.pow(Expr.sqrt(Expr.div(Expr.integer(2), Expr.E)), Expr.sqrt(Expr.integer(2)));
   const tex = Expr.renderTex(expression);

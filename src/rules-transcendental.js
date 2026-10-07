@@ -19,6 +19,7 @@
     { id: "EXP_LN_FORMAL", label: "e^(ln(a)) = a（形式化反函数，a 不为明确的 0）" },
     { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
     { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
+    { id: "EXP_SUB_I_ONE_MINUS_PI", label: "e^(a - i(1 - π)) = -e^(a - i)" },
     { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
     { id: "EXP_PRODUCT_LN", label: "e^(a × ln(b)) = b^a（形式化规则）" },
     { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
@@ -60,6 +61,15 @@
   function isNegativeHalfIpi(expression) {
     if (expression.type === TYPES.NEG) return isHalfIpi(expression.child);
     return expression.type === TYPES.DIV && isNegativeIpi(expression.numerator) && isInteger(expression.denominator, 2);
+  }
+
+  function isIUnitDifference(expression) {
+    if (expression.type !== TYPES.MUL) return false;
+    const factors = [expression.left, expression.right];
+    const difference = factors.find((factor) => (
+      factor.type === TYPES.SUB && isInteger(factor.left, 1) && isConstant(factor.right, "pi")
+    ));
+    return Boolean(difference && factors.some((factor) => isConstant(factor, "i")));
   }
 
   function halfLogarithmArgument(expression) {
@@ -147,6 +157,14 @@
         expression.exponent.type === TYPES.NEG && expression.exponent.child.type === TYPES.LN &&
         isProvablyNonZero(expression.exponent.child.argument)
       ) return { expression: div(ONE, expression.exponent.child.argument), ruleId: "EXP_NEG_LN" };
+      if (
+        expression.exponent.type === TYPES.SUB && isIUnitDifference(expression.exponent.right)
+      ) {
+        return {
+          expression: neg(pow(E, sub(expression.exponent.left, I))),
+          ruleId: "EXP_SUB_I_ONE_MINUS_PI",
+        };
+      }
       if (
         expression.exponent.type === TYPES.ADD &&         expression.exponent.left.type === TYPES.LN &&
         expression.exponent.right.type === TYPES.LN && isProvablyNonZero(expression.exponent.left.argument) &&
