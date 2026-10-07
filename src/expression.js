@@ -165,7 +165,7 @@
         tex = String(expression.value);
         break;
       case TYPES.NEG:
-        tex = `-${renderTex(expression.child, ownPrecedence)}`;
+        tex = `-${renderTex(expression.child, expression.child.type === TYPES.POW ? 0 : ownPrecedence)}`;
         break;
       case TYPES.ADD:
         tex = `${renderTex(expression.left, ownPrecedence)} + ${renderTex(expression.right, ownPrecedence)}`;
