@@ -137,7 +137,8 @@
         break;
       }
       case TYPES.LN:
-        text = `ln(${render(expression.argument)})`;
+        // 保留 ln(i) 的 AST，方便参与 e^ln、对数和等规则；仅把最终显示写成主值。
+        text = isConstant(expression.argument, "i") ? "iπ / 2" : `ln(${render(expression.argument)})`;
         break;
       case TYPES.SQRT:
         text = `√(${render(expression.argument)})`;
@@ -191,7 +192,9 @@
         tex = `{${renderTex(expression.base, ownPrecedence)}}^{${renderTex(expression.exponent)}}`;
         break;
       case TYPES.LN:
-        tex = `\\ln\\left(${renderTex(expression.argument)}\\right)`;
+        tex = isConstant(expression.argument, "i")
+          ? "\\frac{i\\pi}{2}"
+          : `\\ln\\left(${renderTex(expression.argument)}\\right)`;
         break;
       case TYPES.SQRT:
         tex = `\\sqrt{${renderTex(expression.argument)}}`;

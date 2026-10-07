@@ -626,7 +626,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         break;
       }
       case TYPES.LN:
-        text = `ln(${render(expression.argument)})`;
+        // 保留 ln(i) 的 AST，方便参与 e^ln、对数和等规则；仅把最终显示写成主值。
+        text = isConstant(expression.argument, "i") ? "iπ / 2" : `ln(${render(expression.argument)})`;
         break;
       case TYPES.SQRT:
         text = `√(${render(expression.argument)})`;
@@ -680,7 +681,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         tex = `{${renderTex(expression.base, ownPrecedence)}}^{${renderTex(expression.exponent)}}`;
         break;
       case TYPES.LN:
-        tex = `\\ln\\left(${renderTex(expression.argument)}\\right)`;
+        tex = isConstant(expression.argument, "i")
+          ? "\\frac{i\\pi}{2}"
+          : `\\ln\\left(${renderTex(expression.argument)}\\right)`;
         break;
       case TYPES.SQRT:
         tex = `\\sqrt{${renderTex(expression.argument)}}`;
@@ -1139,10 +1142,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_EULER_FORMAL", label: "ln((cos(θ) + i sin(θ)) / b) = iθ - ln(b)（形式化规则）" },
     { id: "LN_EULER_PRODUCT_FORMAL", label: "ln((cos(θ) + i sin(θ))b) = iθ + ln(b)（形式化规则）" },
-    { id: "LN_I_REAL_PRODUCT", label: "ln(ia) = ln(a) + iπ / 2（a > 0）" },
+    { id: "LN_I_REAL_PRODUCT", label: "ln(ia) = ln(a) + ln(i)（a > 0）" },
     { id: "LN_PRODUCT_POSITIVE", label: "ln(a) + ln(b) = ln(ab)（a, b > 0）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
-    { id: "LN_I", label: "ln(i) = iπ / 2（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
     { id: "LN_EXP_QUOTIENT_FORMAL", label: "ln(e^a / b) = a - ln(b)（b ≠ 0，形式化规则）" },
     { id: "LN_REAL_EXP_PRODUCT", label: "ln(e^a × b) = a + ln(b)（a 为实数，b ≠ 0）" },
@@ -1468,7 +1470,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           const other = imaginaryFactor === factors[0] ? factors[1] : factors[0];
           if (isProvablyPositive(other)) {
             return {
-              expression: Expr.add(Expr.ln(other), div(mul(I, PI), integer(2))),
+              expression: Expr.add(Expr.ln(other), Expr.ln(I)),
               ruleId: "LN_I_REAL_PRODUCT",
             };
           }
@@ -1489,9 +1491,6 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         isProvablyNonZero(expression.argument.denominator)
       ) return { expression: neg(Expr.ln(expression.argument.denominator)), ruleId: "LN_RECIPROCAL" };
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
-      if (isConstant(expression.argument, "i")) {
-        return { expression: div(mul(I, PI), integer(2)), ruleId: "LN_I" };
-      }
     }
 
     if (expression.type === TYPES.SIN || expression.type === TYPES.COS) {

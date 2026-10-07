@@ -43,10 +43,9 @@
     { id: "LN_EXP_FORMAL", label: "ln(e^a) = a（形式化反函数）" },
     { id: "LN_EULER_FORMAL", label: "ln((cos(θ) + i sin(θ)) / b) = iθ - ln(b)（形式化规则）" },
     { id: "LN_EULER_PRODUCT_FORMAL", label: "ln((cos(θ) + i sin(θ))b) = iθ + ln(b)（形式化规则）" },
-    { id: "LN_I_REAL_PRODUCT", label: "ln(ia) = ln(a) + iπ / 2（a > 0）" },
+    { id: "LN_I_REAL_PRODUCT", label: "ln(ia) = ln(a) + ln(i)（a > 0）" },
     { id: "LN_PRODUCT_POSITIVE", label: "ln(a) + ln(b) = ln(ab)（a, b > 0）" },
     { id: "LN_MINUS_ONE", label: "ln(-1) = iπ（主值）" },
-    { id: "LN_I", label: "ln(i) = iπ / 2（主值）" },
     { id: "LN_QUOTIENT_POSITIVE_DENOMINATOR", label: "ln(a) - ln(b) = ln(a / b)（b > 0）" },
     { id: "LN_EXP_QUOTIENT_FORMAL", label: "ln(e^a / b) = a - ln(b)（b ≠ 0，形式化规则）" },
     { id: "LN_REAL_EXP_PRODUCT", label: "ln(e^a × b) = a + ln(b)（a 为实数，b ≠ 0）" },
@@ -372,7 +371,7 @@
           const other = imaginaryFactor === factors[0] ? factors[1] : factors[0];
           if (isProvablyPositive(other)) {
             return {
-              expression: Expr.add(Expr.ln(other), div(mul(I, PI), integer(2))),
+              expression: Expr.add(Expr.ln(other), Expr.ln(I)),
               ruleId: "LN_I_REAL_PRODUCT",
             };
           }
@@ -393,9 +392,6 @@
         isProvablyNonZero(expression.argument.denominator)
       ) return { expression: neg(Expr.ln(expression.argument.denominator)), ruleId: "LN_RECIPROCAL" };
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
-      if (isConstant(expression.argument, "i")) {
-        return { expression: div(mul(I, PI), integer(2)), ruleId: "LN_I" };
-      }
     }
 
     if (expression.type === TYPES.SIN || expression.type === TYPES.COS) {
