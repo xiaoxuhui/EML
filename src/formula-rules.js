@@ -37,8 +37,22 @@
     return null;
   }
 
+  function productFactors(expression) {
+    if (expression.type !== TYPES.MUL) return [expression];
+    return [...productFactors(expression.left), ...productFactors(expression.right)];
+  }
+
+  function hasCommonProductFactor(numerator, denominator) {
+    const denominatorKeys = new Set(productFactors(denominator).map(canonicalKey));
+    return productFactors(numerator).some((factor) => denominatorKeys.has(canonicalKey(factor)));
+  }
+
   function rewriteChildren(expression, steps) {
     const simplifyChild = (child) => simplify(child, steps).expression;
+    if (expression.type === TYPES.DIV && Transcendental.eulerSineArgument(expression)) return expression;
+    if (expression.type === TYPES.DIV && hasCommonProductFactor(expression.numerator, expression.denominator)) {
+      return expression;
+    }
     switch (expression.type) {
       case TYPES.NEG:
         return neg(simplifyChild(expression.child));
@@ -59,6 +73,8 @@
         return Expr.sqrt(simplifyChild(expression.argument));
       case TYPES.SIN:
         return Expr.sin(simplifyChild(expression.argument));
+      case TYPES.COS:
+        return Expr.cos(simplifyChild(expression.argument));
       default:
         return expression;
     }

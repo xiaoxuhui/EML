@@ -32,6 +32,7 @@
       case TYPES.SQRT:
         return isProvablyPositive(expression.argument);
       case TYPES.SIN:
+      case TYPES.COS:
         return isProvablyReal(expression.argument);
       default:
         return false;

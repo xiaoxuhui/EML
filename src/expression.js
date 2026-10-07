@@ -17,6 +17,7 @@
     LN: "ln",
     SQRT: "sqrt",
     SIN: "sin",
+    COS: "cos",
   });
 
   const constant = (name) => ({ type: TYPES.CONSTANT, name });
@@ -30,6 +31,7 @@
   const ln = (argument) => ({ type: TYPES.LN, argument });
   const sqrt = (argument) => ({ type: TYPES.SQRT, argument });
   const sin = (argument) => ({ type: TYPES.SIN, argument });
+  const cos = (argument) => ({ type: TYPES.COS, argument });
 
   const ONE = integer(1);
   const ZERO = integer(0);
@@ -68,6 +70,8 @@
         return `sqrt(${canonicalKey(expression.argument)})`;
       case TYPES.SIN:
         return `sin(${canonicalKey(expression.argument)})`;
+      case TYPES.COS:
+        return `cos(${canonicalKey(expression.argument)})`;
       default:
         throw new Error(`未知表达式类型：${expression.type}`);
     }
@@ -141,6 +145,9 @@
       case TYPES.SIN:
         text = `sin(${render(expression.argument)})`;
         break;
+      case TYPES.COS:
+        text = `cos(${render(expression.argument)})`;
+        break;
       default:
         throw new Error(`未知表达式类型：${expression.type}`);
     }
@@ -189,6 +196,9 @@
         break;
       case TYPES.SIN:
         tex = `\\sin\\left(${renderTex(expression.argument)}\\right)`;
+        break;
+      case TYPES.COS:
+        tex = `\\cos\\left(${renderTex(expression.argument)}\\right)`;
         break;
       default:
         throw new Error(`未知表达式类型：${expression.type}`);
@@ -278,6 +288,12 @@
           ? make(Math.sin(argument.re) * Math.cosh(argument.im), Math.cos(argument.re) * Math.sinh(argument.im))
           : null;
       }
+      case TYPES.COS: {
+        const argument = approximate(expression.argument);
+        return argument
+          ? make(Math.cos(argument.re) * Math.cosh(argument.im), -Math.sin(argument.re) * Math.sinh(argument.im))
+          : null;
+      }
       default:
         return null;
     }
@@ -319,6 +335,7 @@
         case TYPES.LN:
         case TYPES.SQRT:
         case TYPES.SIN:
+        case TYPES.COS:
           valid = visit(node.argument, depth + 1);
           break;
         default:
@@ -348,6 +365,7 @@
     ln,
     sqrt,
     sin,
+    cos,
     ONE,
     ZERO,
     E,

@@ -11,7 +11,12 @@
   "use strict";
 
   const { TYPES, ONE, ZERO, E, PI, I, integer, neg, mul, div, pow, sub, isSame, isInteger, isConstant } = Expr;
-  const { isProvablyReal, isProvablyPositive, isProvablyNonZero } = Properties;
+  const {
+    isProvablyReal,
+    isProvablyPositive,
+    isProvablyNonZero,
+    imaginaryCoefficient: pureImaginaryCoefficient,
+  } = Properties;
 
   const rules = [
     { id: "EXP_ZERO", label: "e^0 = 1" },
@@ -26,10 +31,11 @@
     { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
     { id: "EXP_HALF", label: "e^(1 / 2) = √(e)" },
     { id: "EXP_HALF_LN", label: "e^(ln(a) / 2) = √(a)（形式化规则）" },
-    { id: "EULER_IDENTITY", label: "e^(iπ) = -1" },
-    { id: "EULER_NEG_IDENTITY", label: "e^(-iπ) = -1" },
-    { id: "EULER_HALF_IDENTITY", label: "e^(iπ / 2) = i" },
-    { id: "EULER_NEG_HALF_IDENTITY", label: "e^(-iπ / 2) = -i" },
+    { id: "EULER_FORMULA", label: "e^(iθ) = cos(θ) + i sin(θ)" },
+    { id: "SIN_INTEGER_PI", label: "sin(nπ) = 0（n 为整数）" },
+    { id: "COS_INTEGER_PI", label: "cos(nπ) = (-1)^n（n 为整数）" },
+    { id: "SIN_HALF_INTEGER_PI", label: "sin(nπ / 2) 的标准值（n 为整数）" },
+    { id: "COS_HALF_INTEGER_PI", label: "cos(nπ / 2) 的标准值（n 为整数）" },
     { id: "LN_ONE", label: "ln(1) = 0" },
     { id: "LN_E", label: "ln(e) = 1" },
     { id: "LN_SQRT_E", label: "ln(√(e)) = 1 / 2" },
@@ -62,6 +68,50 @@
   function isNegativeHalfIpi(expression) {
     if (expression.type === TYPES.NEG) return isHalfIpi(expression.child);
     return expression.type === TYPES.DIV && isNegativeIpi(expression.numerator) && isInteger(expression.denominator, 2);
+  }
+
+  function piCoefficient(expression) {
+    if (isConstant(expression, "pi")) return { numerator: 1, denominator: 1 };
+    if (expression.type === TYPES.NEG) {
+      const coefficient = piCoefficient(expression.child);
+      return coefficient && { ...coefficient, numerator: -coefficient.numerator };
+    }
+    if (expression.type === TYPES.MUL) {
+      if (expression.left.type === TYPES.INTEGER) {
+        const coefficient = piCoefficient(expression.right);
+        return coefficient && { ...coefficient, numerator: coefficient.numerator * expression.left.value };
+      }
+      if (expression.right.type === TYPES.INTEGER) {
+        const coefficient = piCoefficient(expression.left);
+        return coefficient && { ...coefficient, numerator: coefficient.numerator * expression.right.value };
+      }
+    }
+    if (expression.type === TYPES.DIV && expression.denominator.type === TYPES.INTEGER && expression.denominator.value !== 0) {
+      const coefficient = piCoefficient(expression.numerator);
+      return coefficient && {
+        numerator: coefficient.numerator,
+        denominator: coefficient.denominator * expression.denominator.value,
+      };
+    }
+    return null;
+  }
+
+  function normalizedMod(value, modulus) {
+    return ((value % modulus) + modulus) % modulus;
+  }
+
+  function trigStandardValue(type, argument) {
+    const coefficient = piCoefficient(argument);
+    if (!coefficient) return null;
+    const { numerator, denominator } = coefficient;
+    if (denominator === 1) {
+      if (type === TYPES.SIN) return ZERO;
+      return integer(normalizedMod(numerator, 2) === 0 ? 1 : -1);
+    }
+    if (Math.abs(denominator) !== 2) return null;
+    const quadrant = normalizedMod(numerator * Math.sign(denominator), 4);
+    const values = type === TYPES.SIN ? [0, 1, 0, -1] : [1, 0, -1, 0];
+    return integer(values[quadrant]);
   }
 
   function isIUnitDifference(expression) {
@@ -134,10 +184,13 @@
         expression.exponent.type === TYPES.DIV && isInteger(expression.exponent.numerator, 1) &&
         isInteger(expression.exponent.denominator, 2)
       ) return { expression: Expr.sqrt(E), ruleId: "EXP_HALF" };
-      if (isIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_IDENTITY" };
-      if (isNegativeIpi(expression.exponent)) return { expression: integer(-1), ruleId: "EULER_NEG_IDENTITY" };
-      if (isHalfIpi(expression.exponent)) return { expression: I, ruleId: "EULER_HALF_IDENTITY" };
-      if (isNegativeHalfIpi(expression.exponent)) return { expression: neg(I), ruleId: "EULER_NEG_HALF_IDENTITY" };
+      const imaginaryPart = pureImaginaryCoefficient(expression.exponent);
+      if (imaginaryPart) {
+        return {
+          expression: Expr.add(Expr.cos(imaginaryPart), mul(I, Expr.sin(imaginaryPart))),
+          ruleId: "EULER_FORMULA",
+        };
+      }
       // EML uses this as a formal inverse rule. At this point the argument has
       // already been simplified bottom-up, so an actually recognized zero is
       // represented by the integer 0. Requiring a complete nonzero proof here
@@ -256,6 +309,19 @@
       if (isInteger(expression.argument, -1)) return { expression: mul(I, PI), ruleId: "LN_MINUS_ONE" };
       if (isConstant(expression.argument, "i")) {
         return { expression: div(mul(I, PI), integer(2)), ruleId: "LN_I" };
+      }
+    }
+
+    if (expression.type === TYPES.SIN || expression.type === TYPES.COS) {
+      const standardValue = trigStandardValue(expression.type, expression.argument);
+      if (standardValue) {
+        const isHalf = Math.abs(piCoefficient(expression.argument)?.denominator || 1) === 2;
+        return {
+          expression: standardValue,
+          ruleId: expression.type === TYPES.SIN
+            ? isHalf ? "SIN_HALF_INTEGER_PI" : "SIN_INTEGER_PI"
+            : isHalf ? "COS_HALF_INTEGER_PI" : "COS_INTEGER_PI",
+        };
       }
     }
 

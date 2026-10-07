@@ -76,7 +76,23 @@ test("U04 欧拉公式 EML(iπ, 1) 化简为 -1", () => {
   const ipi = Expr.mul(Expr.I, Expr.PI);
   const result = evaluate(ipi, Expr.ONE);
   assert.equal(result.displayText, "-1");
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EULER_IDENTITY"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EULER_FORMULA"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "COS_INTEGER_PI"));
+});
+
+test("欧拉公式对一般纯虚指数展开为 cos 与 sin", () => {
+  const result = Rules.simplify(Expr.pow(Expr.E, Expr.I));
+  assert.equal(Expr.render(result.expression), "cos(1) + i × sin(1)");
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_FORMULA"));
+});
+
+test("欧拉公式：e^(2iπ) 经三角函数化简为 1", () => {
+  const exponent = Expr.mul(Expr.integer(2), Expr.mul(Expr.I, Expr.PI));
+  const result = Rules.simplify(Expr.pow(Expr.E, exponent));
+  assert.equal(Expr.render(result.expression), "1");
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_FORMULA"));
+  assert.ok(result.steps.some((step) => step.ruleId === "COS_INTEGER_PI"));
+  assert.ok(result.steps.some((step) => step.ruleId === "SIN_INTEGER_PI"));
 });
 
 test("U05 π 和 ln 保持符号形式", () => {
@@ -85,9 +101,10 @@ test("U05 π 和 ln 保持符号形式", () => {
   assert.doesNotMatch(result.displayText, /3\.14|0\.69/);
 });
 
-test("U06 i 保持符号形式", () => {
+test("U06 i 保持符号形式并按欧拉公式展开", () => {
   const result = evaluate(Expr.I, Expr.ONE);
-  assert.equal(result.displayText, "e^(i)");
+  assert.equal(result.displayText, "cos(1) + i × sin(1)");
+  assert.doesNotMatch(result.displayText, /[0-9]\.[0-9]/);
   assert.doesNotMatch(result.displayText, /0\.54|0\.84/);
 });
 
@@ -319,7 +336,7 @@ test("e^(ln(a)) 不对非正实数参数进行消去", () => {
   assert.equal(Expr.render(result.expression), "-1");
   assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_FORMAL"), false);
   assert.ok(result.steps.some((step) => step.ruleId === "LN_MINUS_ONE"));
-  assert.ok(result.steps.some((step) => step.ruleId === "EULER_IDENTITY"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_FORMULA"));
 });
 
 test("回归：1 - -1 化简为 2", () => {
@@ -397,18 +414,20 @@ test("对数差不与非正分母合并", () => {
   assert.equal(result.steps.some((step) => step.ruleId === "LN_QUOTIENT_POSITIVE_DENOMINATOR"), false);
 });
 
-test("欧拉特殊角：e^(iπ / 2) 化简为 i", () => {
+test("欧拉公式与三角函数标准值：e^(iπ / 2) 化简为 i", () => {
   const exponent = Expr.div(Expr.mul(Expr.I, Expr.PI), Expr.integer(2));
   const result = Rules.simplify(Expr.pow(Expr.E, exponent));
   assert.equal(Expr.render(result.expression), "i");
-  assert.ok(result.steps.some((step) => step.ruleId === "EULER_HALF_IDENTITY"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_FORMULA"));
+  assert.ok(result.steps.some((step) => step.ruleId === "SIN_HALF_INTEGER_PI"));
 });
 
-test("欧拉特殊角：e^(-iπ / 2) 化简为 -i", () => {
+test("欧拉公式与三角函数标准值：e^(-iπ / 2) 化简为 -i", () => {
   const exponent = Expr.neg(Expr.div(Expr.mul(Expr.I, Expr.PI), Expr.integer(2)));
   const result = Rules.simplify(Expr.pow(Expr.E, exponent));
   assert.equal(Expr.render(result.expression), "-i");
-  assert.ok(result.steps.some((step) => step.ruleId === "EULER_NEG_HALF_IDENTITY"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_FORMULA"));
+  assert.ok(result.steps.some((step) => step.ruleId === "SIN_HALF_INTEGER_PI"));
 });
 
 test("基础对数：ln(√(e)) 化简为 1 / 2", () => {
@@ -423,7 +442,7 @@ test("回归：e^(iπ / 2 - ln(2)) 化简为 i / 2", () => {
   const result = Rules.simplify(Expr.pow(Expr.E, exponent));
   assert.equal(Expr.render(result.expression), "i / 2");
   assert.ok(result.steps.some((step) => step.ruleId === "EXP_SUB_LN"));
-  assert.ok(result.steps.some((step) => step.ruleId === "EULER_HALF_IDENTITY"));
+  assert.ok(result.steps.some((step) => step.ruleId === "EULER_FORMULA"));
 });
 
 test("回归：e^(ln(e^e × √2 / 2) - e) 化简为 √2 / 2", () => {
@@ -817,7 +836,7 @@ test("回归：双层指数中的 -i(1-π) 化简为外层负号", () => {
     )
   );
   const result = Rules.simplify(expression);
-  assert.equal(Expr.render(result.expression), "-(e^(ln(√(2)) × e^(i) - i))");
+  assert.equal(Expr.render(result.expression), "-(e^(ln(√(2)) × (cos(1) + i × sin(1)) - i))");
   assert.ok(result.steps.some((step) => step.ruleId === "EXP_SUM_LN_FACTOR"));
   assert.ok(result.steps.some((step) => step.ruleId === "EXP_SUB_I_ONE_MINUS_PI"));
 });
@@ -832,11 +851,15 @@ test("TeX 数学渲染覆盖上标、根式、分式和数学常量", () => {
   assert.equal(tex.includes("^("), false);
 });
 
-test("sin 表达式支持符号显示、近似计算和保存校验", () => {
+test("sin、cos 表达式支持符号显示、近似计算和保存校验", () => {
   const expression = Expr.sin(Expr.ONE);
+  const cosine = Expr.cos(Expr.ONE);
   assert.equal(Expr.render(expression), "sin(1)");
+  assert.equal(Expr.render(cosine), "cos(1)");
   assert.ok(Math.abs(Expr.approximate(expression).re - Math.sin(1)) < 1e-12);
+  assert.ok(Math.abs(Expr.approximate(cosine).re - Math.cos(1)) < 1e-12);
   assert.equal(Expr.isValidExpression(expression), true);
+  assert.equal(Expr.isValidExpression(cosine), true);
 });
 
 test("回归：(e^i - e^(-i)) / (2i) 化简为 sin(1)", () => {
@@ -858,7 +881,7 @@ test("欧拉正弦公式不匹配错误分母", () => {
   const numerator = Expr.sub(Expr.pow(Expr.E, Expr.I), Expr.pow(Expr.E, Expr.neg(Expr.I)));
   const expression = Expr.div(numerator, Expr.integer(2));
   const result = Rules.simplify(expression);
-  assert.equal(Expr.render(result.expression), "(e^(i) - e^(-i)) / 2");
+  assert.equal(Expr.render(result.expression), "(cos(1) + i × sin(1) - (cos(-1) + i × sin(-1))) / 2");
   assert.equal(result.steps.some((step) => step.ruleId === "EULER_SINE"), false);
 });
 
