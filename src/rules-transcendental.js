@@ -10,7 +10,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Properties) {
   "use strict";
 
-  const { TYPES, ONE, ZERO, E, PI, I, integer, neg, mul, div, pow, sub, isSame, isInteger, isConstant } = Expr;
+  const { TYPES, ONE, ZERO, E, PI, I, integer, neg, add, mul, div, pow, sub, isSame, isInteger, isConstant } = Expr;
   const {
     isProvablyReal,
     isProvablyPositive,
@@ -27,6 +27,7 @@
     { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
     { id: "EXP_SUB_I_ONE_MINUS_PI", label: "e^(a - i(1 - π)) = -e^(a - i)" },
     { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
+    { id: "EXP_NESTED_SUM_LN_FACTOR", label: "e^((ln(a) + b) + c) = a × e^(b + c)（形式化规则）" },
     { id: "EXP_PRODUCT_LN", label: "e^(a × ln(b)) = b^a（形式化规则）" },
     { id: "EXP_SUM_LN_FACTOR", label: "e^(a + ln(b)) = b × e^a（形式化规则）" },
     { id: "EXP_HALF", label: "e^(1 / 2) = √(e)" },
@@ -279,6 +280,19 @@
         return {
           expression: mul(expression.exponent.left.argument, expression.exponent.right.argument),
           ruleId: "EXP_ADD_LN",
+        };
+      }
+      if (
+        expression.exponent.type === TYPES.ADD && expression.exponent.left.type === TYPES.ADD &&
+        expression.exponent.left.left.type === TYPES.LN &&
+        isProvablyNonZero(expression.exponent.left.left.argument)
+      ) {
+        return {
+          expression: mul(
+            expression.exponent.left.left.argument,
+            pow(E, add(expression.exponent.left.right, expression.exponent.right))
+          ),
+          ruleId: "EXP_NESTED_SUM_LN_FACTOR",
         };
       }
       if (expression.exponent.type === TYPES.MUL) {

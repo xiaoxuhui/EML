@@ -11,7 +11,7 @@
   "use strict";
 
   const { TYPES, ONE, ZERO, I, integer, neg, add, sub, mul, canonicalKey, isSame, isInteger, isConstant } = Expr;
-  const { isProvablyNonZero, imaginaryCoefficient } = Properties;
+  const { isProvablyNonZero, isProvablyReal, imaginaryCoefficient } = Properties;
 
   const rules = [
     { id: "NEG_INTEGER", label: "负整数化简" },
@@ -48,8 +48,10 @@
     { id: "MUL_ZERO", label: "a × 0 = 0" },
     { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
     { id: "MUL_INTEGER_LEFT", label: "a × n = n × a" },
+    { id: "MUL_FRACTION_SAME_FACTOR", label: "(a / b) × a = a^2 / b" },
     { id: "I_SQUARED", label: "i × i = -1" },
     { id: "MUL_SELF_POWER", label: "a × a = a^2" },
+    { id: "MUL_COMPLEX_BY_IMAGINARY", label: "(a + ib)ic = -bc + iac" },
     { id: "MUL_IMAGINARY_FACTORS", label: "(ia)(ib) = -ab" },
     { id: "MUL_NEG_FACTOR", label: "(-a)b = -(ab)" },
     { id: "MUL_NEGATIVE_FRACTION", label: "a × (-b / c) = -(a × b / c)" },
@@ -512,6 +514,17 @@
           ruleId: "I_TIMES_DIV",
         };
       }
+      const fractionFactor = expression.left.type === TYPES.DIV && isSame(expression.left.numerator, expression.right)
+        ? expression.left
+        : expression.right.type === TYPES.DIV && isSame(expression.right.numerator, expression.left)
+          ? expression.right
+          : null;
+      if (fractionFactor) {
+        return {
+          expression: Expr.div(Expr.pow(fractionFactor.numerator, integer(2)), fractionFactor.denominator),
+          ruleId: "MUL_FRACTION_SAME_FACTOR",
+        };
+      }
       if (
         expression.right.type === TYPES.DIV && expression.right.numerator.type === TYPES.INTEGER &&
         expression.right.numerator.value < 0
@@ -527,6 +540,28 @@
         return {
           expression: neg(mul(leftCoefficient, rightCoefficient)),
           ruleId: "MUL_IMAGINARY_FACTORS",
+        };
+      }
+      const complexTerm = expression.left.type === TYPES.ADD ? expression.left
+        : expression.right.type === TYPES.ADD ? expression.right : null;
+      const imaginaryTerm = complexTerm === expression.left ? expression.right
+        : complexTerm === expression.right ? expression.left : null;
+      const imaginaryScale = imaginaryTerm && imaginaryCoefficient(imaginaryTerm);
+      const complexImaginaryScale = complexTerm && imaginaryCoefficient(complexTerm.right);
+      const isEulerForm = complexTerm && complexTerm.left.type === TYPES.COS &&
+        complexTerm.right.type === TYPES.MUL && isConstant(complexTerm.right.left, "i") &&
+        complexTerm.right.right.type === TYPES.SIN &&
+        isSame(complexTerm.left.argument, complexTerm.right.right.argument);
+      if (
+        complexTerm && !isEulerForm && imaginaryScale && complexImaginaryScale &&
+        isProvablyReal(complexTerm.left) && isProvablyReal(imaginaryScale)
+      ) {
+        return {
+          expression: add(
+            neg(mul(complexImaginaryScale, imaginaryScale)),
+            mul(mul(I, imaginaryScale), complexTerm.left)
+          ),
+          ruleId: "MUL_COMPLEX_BY_IMAGINARY",
         };
       }
       if (expression.left.type === TYPES.NEG) {

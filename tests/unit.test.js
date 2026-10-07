@@ -125,6 +125,20 @@ test("π² 作为对数真数时可继续完成嵌套指数化简", () => {
   assert.equal(Rules.isProvablyNonZero(Expr.pow(Expr.PI, Expr.integer(2))), true);
 });
 
+test("嵌套指数可化为带实部和虚部的标准指数", () => {
+  const halfIpi = Expr.div(Expr.mul(Expr.I, Expr.PI), Expr.integer(2));
+  const innerExponent = Expr.add(
+    Expr.add(Expr.ln(Expr.add(Expr.ln(Expr.PI), halfIpi)), Expr.ln(Expr.PI)),
+    halfIpi
+  );
+  const expression = Expr.pow(Expr.E, Expr.pow(Expr.E, innerExponent));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "e^(-(π^(2)) / 2 + iπ × ln(π))");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_NESTED_SUM_LN_FACTOR"));
+  assert.ok(result.steps.some((step) => step.ruleId === "MUL_COMPLEX_BY_IMAGINARY"));
+  assert.ok(result.steps.some((step) => step.ruleId === "MUL_FRACTION_SAME_FACTOR"));
+});
+
 test("对数可识别欧拉展开式及其同分母缩放形式", () => {
   const euler = Expr.add(Expr.cos(Expr.ONE), Expr.mul(Expr.I, Expr.sin(Expr.ONE)));
   const scaledEuler = Expr.add(
