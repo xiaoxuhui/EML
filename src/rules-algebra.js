@@ -48,6 +48,7 @@
     { id: "MUL_ZERO", label: "a × 0 = 0" },
     { id: "MUL_NEG_ONE", label: "a × (-1) = -a" },
     { id: "I_SQUARED", label: "i × i = -1" },
+    { id: "MUL_SELF_POWER", label: "a × a = a^2" },
     { id: "MUL_IMAGINARY_FACTORS", label: "(ia)(ib) = -ab" },
     { id: "MUL_NEG_FACTOR", label: "(-a)b = -(ab)" },
     { id: "MUL_NEGATIVE_FRACTION", label: "a × (-b / c) = -(a × b / c)" },
@@ -488,6 +489,9 @@
       }
       if (isConstant(expression.left, "i") && isConstant(expression.right, "i")) {
         return { expression: integer(-1), ruleId: "I_SQUARED" };
+      }
+      if (isSame(expression.left, expression.right)) {
+        return { expression: Expr.pow(expression.left, integer(2)), ruleId: "MUL_SELF_POWER" };
       }
       if (isConstant(expression.left, "i") && expression.right.type === TYPES.DIV) {
         return {

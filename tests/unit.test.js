@@ -95,6 +95,13 @@ test("欧拉公式：e^(2iπ) 经三角函数化简为 1", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "SIN_INTEGER_PI"));
 });
 
+test("指数中的 ππ 先合并为 π²", () => {
+  const expression = Expr.pow(Expr.E, Expr.neg(Expr.mul(Expr.PI, Expr.PI)));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "e^(-(π^(2)))");
+  assert.ok(result.steps.some((step) => step.ruleId === "MUL_SELF_POWER"));
+});
+
 test("对数可识别欧拉展开式及其同分母缩放形式", () => {
   const euler = Expr.add(Expr.cos(Expr.ONE), Expr.mul(Expr.I, Expr.sin(Expr.ONE)));
   const scaledEuler = Expr.add(
