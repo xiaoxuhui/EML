@@ -426,6 +426,27 @@ test("回归：e^(iπ / 2 - ln(2)) 化简为 i / 2", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "EULER_HALF_IDENTITY"));
 });
 
+test("回归：e^(ln(e^e × √2 / 2) - e) 化简为 √2 / 2", () => {
+  const expression = Expr.pow(
+    Expr.E,
+    Expr.sub(
+      Expr.ln(Expr.div(Expr.mul(Expr.pow(Expr.E, Expr.E), Expr.sqrt(Expr.integer(2))), Expr.integer(2))),
+      Expr.E
+    )
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "√(2) / 2");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_LN_SUB"));
+  assert.ok(result.steps.some((step) => step.ruleId === "DIV_COMMON_FACTOR_CANCEL"));
+});
+
+test("指数对数差规则不消去 ln(0)", () => {
+  const expression = Expr.pow(Expr.E, Expr.sub(Expr.ln(Expr.ZERO), Expr.E));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "e^(ln(0) - e)");
+  assert.equal(result.steps.some((step) => step.ruleId === "EXP_LN_SUB"), false);
+});
+
 test("指数差规则不消去 ln(0)", () => {
   const exponent = Expr.sub(Expr.ONE, Expr.ln(Expr.ZERO));
   const result = Rules.simplify(Expr.pow(Expr.E, exponent));

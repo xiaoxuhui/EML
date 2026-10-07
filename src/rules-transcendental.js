@@ -18,6 +18,7 @@
     { id: "EXP_ONE", label: "e^1 = e" },
     { id: "EXP_LN_FORMAL", label: "e^(ln(a)) = a（形式化反函数，a 不为明确的 0）" },
     { id: "EXP_SUB_LN", label: "e^(a - ln(b)) = e^a / b（b ≠ 0）" },
+    { id: "EXP_LN_SUB", label: "e^(ln(a) - b) = a / e^b（形式化反函数，a 不为明确的 0）" },
     { id: "EXP_NEG_LN", label: "e^(-ln(b)) = 1 / b（b ≠ 0）" },
     { id: "EXP_SUB_I_ONE_MINUS_PI", label: "e^(a - i(1 - π)) = -e^(a - i)" },
     { id: "EXP_ADD_LN", label: "e^(ln(a) + ln(b)) = ab（形式化规则）" },
@@ -151,6 +152,19 @@
         return {
           expression: div(pow(E, expression.exponent.left), expression.exponent.right.argument),
           ruleId: "EXP_SUB_LN",
+        };
+      }
+      if (
+        expression.exponent.type === TYPES.SUB && expression.exponent.left.type === TYPES.LN &&
+        !isInteger(expression.exponent.left.argument, 0)
+      ) {
+        const logarithmArgument = expression.exponent.left.argument;
+        const exponential = pow(E, expression.exponent.right);
+        return {
+          expression: logarithmArgument.type === TYPES.DIV
+            ? div(logarithmArgument.numerator, mul(logarithmArgument.denominator, exponential))
+            : div(logarithmArgument, exponential),
+          ruleId: "EXP_LN_SUB",
         };
       }
       if (
