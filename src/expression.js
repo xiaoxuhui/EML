@@ -101,13 +101,9 @@
       case TYPES.NEG:
         if (expression.child.type === TYPES.NEG) {
           text = `-(${render(expression.child)})`;
-        } else if (
-          expression.child.type === TYPES.MUL &&
-          [expression.child.left, expression.child.right].every((part) =>
-            [TYPES.CONSTANT, TYPES.INTEGER].includes(part.type)
-          )
-        ) {
-          text = `-${render(expression.child, 2)}`;
+        } else if (expression.child.type === TYPES.MUL) {
+          // -ab 与 -(ab) 等价；乘积不必再额外包一层括号。
+          text = `-${render(expression.child)}`;
         } else {
           text = `-${render(expression.child, ownPrecedence)}`;
         }
