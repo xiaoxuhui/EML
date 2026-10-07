@@ -174,7 +174,7 @@
       case TYPES.DIV:
         return isProvablyNonZero(expression.numerator) && isProvablyNonZero(expression.denominator);
       case TYPES.POW:
-        return isConstant(expression.base, "e");
+        return isProvablyNonZero(expression.base);
       case TYPES.LN:
         return isProvablyNonZero(expression.argument) && isProvablyNotOne(expression.argument);
       case TYPES.ADD:

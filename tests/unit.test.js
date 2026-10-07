@@ -113,6 +113,18 @@ test("整数因子置左使嵌套指数显示为 e 的 -2π 次方", () => {
   assert.ok(result.steps.some((step) => step.ruleId === "MUL_INTEGER_LEFT"));
 });
 
+test("π² 作为对数真数时可继续完成嵌套指数化简", () => {
+  const innerExponent = Expr.add(
+    Expr.ln(Expr.mul(Expr.PI, Expr.PI)),
+    Expr.mul(Expr.I, Expr.PI)
+  );
+  const expression = Expr.pow(Expr.E, Expr.pow(Expr.E, innerExponent));
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "e^(-(π^(2)))");
+  assert.ok(result.steps.some((step) => step.ruleId === "EXP_SUM_LN_FACTOR"));
+  assert.equal(Rules.isProvablyNonZero(Expr.pow(Expr.PI, Expr.integer(2))), true);
+});
+
 test("对数可识别欧拉展开式及其同分母缩放形式", () => {
   const euler = Expr.add(Expr.cos(Expr.ONE), Expr.mul(Expr.I, Expr.sin(Expr.ONE)));
   const scaledEuler = Expr.add(
