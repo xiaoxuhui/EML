@@ -11,7 +11,7 @@
   "use strict";
 
   const { TYPES, ONE, ZERO, I, integer, neg, add, sub, mul, canonicalKey, isSame, isInteger, isConstant } = Expr;
-  const { isProvablyNonZero, isProvablyReal, imaginaryCoefficient } = Properties;
+  const { isProvablyNonZero, isProvablyReal, isProvablyPositive, imaginaryCoefficient } = Properties;
 
   const rules = [
     { id: "NEG_INTEGER", label: "负整数化简" },
@@ -36,6 +36,7 @@
     { id: "SUB_NESTED_SAME_LEFT", label: "(a - b) - (a - c) = c - b" },
     { id: "SUB_NESTED_ADD_SAME_LEFT", label: "(a - b) - (a + c) = -(b + c)" },
     { id: "SUB_NESTED_RATIONAL_FOLD", label: "r - (n - a) = (r - n) + a" },
+    { id: "SUB_LOG_THROUGH_SUM", label: "(ln(a) + c) - ln(b) = ln(a / b) + c（b > 0）" },
     { id: "SUB_NEGATIVE", label: "a - (-b) = a + b" },
     { id: "SUB_NEGATIVE_FRACTION", label: "a - (-b / c) = a + b / c" },
     { id: "SUB_ADDED_LEFT", label: "a - (a + b) = -b" },
@@ -343,6 +344,20 @@
       }
       if (expression.left.type === TYPES.SUB && isSame(expression.left.left, expression.right)) {
         return { expression: neg(expression.left.right), ruleId: "SUB_NESTED_RIGHT" };
+      }
+      if (expression.right.type === TYPES.LN && isProvablyPositive(expression.right.argument)) {
+        const leftLogarithm = expression.left.type === TYPES.ADD && expression.left.left.type === TYPES.LN
+          ? expression.left.left
+          : expression.left.type === TYPES.ADD && expression.left.right.type === TYPES.LN
+            ? expression.left.right
+            : null;
+        if (leftLogarithm) {
+          const other = leftLogarithm === expression.left.left ? expression.left.right : expression.left.left;
+          return {
+            expression: add(sub(leftLogarithm, expression.right), other),
+            ruleId: "SUB_LOG_THROUGH_SUM",
+          };
+        }
       }
       if (expression.right.type === TYPES.NEG) {
         return { expression: add(expression.left, expression.right.child), ruleId: "SUB_NEGATIVE" };
