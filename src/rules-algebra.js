@@ -335,6 +335,9 @@
       if (integerFraction) return { expression: integerFraction, ruleId: "INTEGER_FRACTION_SUB" };
       if (isInteger(expression.right, 0)) return { expression: expression.left, ruleId: "SUB_ZERO" };
       if (isSame(expression.left, expression.right)) return { expression: ZERO, ruleId: "SUB_SELF" };
+      if (expression.right.type === TYPES.INTEGER && expression.right.value < 0) {
+        return { expression: add(expression.left, integer(-expression.right.value)), ruleId: "SUB_NEGATIVE" };
+      }
       if (expression.right.type === TYPES.SUB && isSame(expression.left, expression.right.left)) {
         return { expression: expression.right.right, ruleId: "SUB_NESTED_LEFT" };
       }
