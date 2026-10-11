@@ -2,7 +2,17 @@
 
 本目录包含可直接分发的单文件发布包。
 
-## EML-v1.1.0.zip（当前版本）
+## EML-v1.3.1.zip（当前版本）
+
+由 `v1.3.1` 标签对应的源代码构建。解压后打开 `eml-workbench.html` 即可运行；
+请保留同目录的 `katex/` 文件夹以加载正式数学排版资源。
+
+- 文件大小：386,397 字节
+- SHA-256：`B207495A8AEB9F561A528631CAAB70F8BB5F4C72807CCEFF26EB88BA731CE73C`
+- 内容：`eml-workbench.html`、`katex/`、`README-v1.3.1.txt`
+- 兼容性：保存文件格式为 V2，原有本地缓存与导入文件可直接继续使用。
+
+## EML-v1.1.0.zip（历史版本）
 
 由 `v1.1.0` 标签对应的源代码构建（`dist/eml-workbench.html`）。解压后双击 `eml-workbench.html` 即可运行，不需要安装依赖或启动服务器。
 
