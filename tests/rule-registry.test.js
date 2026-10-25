@@ -8,8 +8,8 @@ test("规则注册表按领域拆分且编号唯一", () => {
   assert.equal(Rules.rules.length, 88);
   assert.equal(new Set(Rules.rules.map((rule) => rule.id)).size, Rules.rules.length);
   // 分领域计数：加规则时两处都要动，避免「只在总表里悄悄加了一条」。
-  assert.equal(Rules.registries[0].ruleIds.length, 33);
-  assert.equal(Rules.registries[1].ruleIds.length, 55);
+  assert.equal(Rules.registries[0].ruleIds.length, 32);
+  assert.equal(Rules.registries[1].ruleIds.length, 56);
 });
 
 test("每个注册规则都具有可审计的说明", () => {

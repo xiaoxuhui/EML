@@ -6,3 +6,4 @@ coverage/
 .DS_Store
 Thumbs.db
 _browser_test/
+eml-workbench-v2-*.json

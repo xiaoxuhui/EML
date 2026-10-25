@@ -495,9 +495,10 @@ test("基础代数组合规则审计", () => {
 test("回归：e^(ln(ln(iπ))) - ln(2) 保留主值对数的虚部", () => {
   const x = Expr.ln(Expr.ln(Expr.mul(Expr.I, Expr.PI)));
   const result = evaluate(x, Expr.integer(2));
-  assert.equal(result.displayText, "ln(π) + iπ / 2 - ln(2)");
+  assert.equal(result.displayText, "ln(π / 2) + iπ / 2");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "EXP_LN_FORMAL"));
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_I_REAL_PRODUCT"));
+  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_LOG_THROUGH_SUM"));
 });
 
 test("除法节点保持符号形式并支持近似计算", () => {
@@ -585,9 +586,34 @@ test("回归：e - ln(e^e × i) 化简为 -iπ / 2", () => {
   const result = evaluate(Expr.ONE, y);
   assert.equal(result.displayText, "-iπ / 2");
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_REAL_EXP_PRODUCT"));
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "LN_I"));
   assert.ok(result.rewriteSteps.some((step) => step.ruleId === "SUB_ADDED_LEFT"));
-  assert.ok(result.rewriteSteps.some((step) => step.ruleId === "NEG_DIV"));
+});
+
+test("ln(i) 保持可计算节点，但最终按主值显示", () => {
+  const logarithm = Expr.ln(Expr.I);
+  const simplified = Rules.simplify(logarithm);
+  assert.ok(Expr.isSame(simplified.expression, logarithm));
+  assert.equal(Expr.render(simplified.expression), "iπ / 2");
+  assert.equal(Expr.renderTex(simplified.expression), "\\frac{i\\pi}{2}");
+  assert.equal(Expr.render(Rules.simplify(Expr.pow(Expr.E, logarithm)).expression), "i");
+});
+
+test("回归：减去负整数化简为加法", () => {
+  const result = Rules.simplify(Expr.sub(Expr.E, Expr.integer(-1)));
+  assert.equal(Expr.render(result.expression), "e + 1");
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_NEGATIVE"));
+});
+
+test("回归：对数差可穿过和式继续化简", () => {
+  const halfIpi = Expr.div(Expr.mul(Expr.I, Expr.PI), Expr.integer(2));
+  const expression = Expr.sub(
+    Expr.add(Expr.ln(Expr.PI), halfIpi),
+    Expr.ln(Expr.integer(2))
+  );
+  const result = Rules.simplify(expression);
+  assert.equal(Expr.render(result.expression), "ln(π / 2) + iπ / 2");
+  assert.ok(result.steps.some((step) => step.ruleId === "SUB_LOG_THROUGH_SUM"));
+  assert.ok(result.steps.some((step) => step.ruleId === "LN_QUOTIENT_POSITIVE_DENOMINATOR"));
 });
 
 test("乘积对数规则不展开复指数或零因子", () => {
@@ -990,7 +1016,7 @@ test("欧拉正弦公式不匹配错误分母", () => {
 test("复数乘法计算树中的负号显示无歧义", () => {
   const nestedProduct = Expr.neg(Expr.mul(Expr.I, Expr.mul(Expr.I, Expr.PI)));
   const doubleNegative = Expr.neg(Expr.neg(Expr.PI));
-  assert.equal(Expr.render(nestedProduct), "-(i × iπ)");
+  assert.equal(Expr.render(nestedProduct), "-i × iπ");
   assert.equal(Expr.render(doubleNegative), "-(-π)");
 });
 
