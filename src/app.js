@@ -909,24 +909,20 @@
       return false;
     }
     const names = definition?.parameterNames || ["x", "y"];
-    const ids = custom?.inputValueIds || [state.inputXId, state.inputYId];
-    const args = names.map((name, index) => {
-      const value = currentValue(ids[index]);
-      const presentation = value && presentationFor(value);
-      return value ? { type: "constant", expression: presentation.expression, displayText: presentation.displayText }
-        : { type: "parameter", name };
-    });
+    const args = names.map((name) => ({ type: "parameter", name }));
     const node = definition ? { type: "call", name: definition.name, arguments: args }
       : { type: "eml", left: args[0], right: args[1] };
     elements.detailsEmpty.hidden = true;
     elements.detailsContent.hidden = false;
     elements.selectedDetailLabel.textContent = "当前函数：";
+    elements.selectedValue.removeAttribute("aria-label");
     elements.selectedValue.textContent = `${definition?.name || "EML"}(${names.join(", ")})`;
     elements.traceDetailBlock.hidden = true;
-    elements.directFormulaList.textContent = definition?.displayText || "EML(x, y) = e^x - ln(y)";
+    const tree = FunctionStructure.toEmlTree(FunctionStructure.expand(node, definitions));
+    elements.directFormulaList.textContent = tree.label || `EML(${tree.inputs.map((input) => input.label || input.result).join(", ")}) = ${tree.result}`;
     elements.calculationTree.replaceChildren();
     treeController.ensureValue(`function:${applicationStructureId}`);
-    appendFunctionStructure(elements.calculationTree, FunctionStructure.expand(node, definitions));
+    elements.calculationTree.appendChild(renderExpandedEml(tree, true));
     treeController.apply();
     return true;
   }

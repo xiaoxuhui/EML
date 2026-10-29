@@ -6,6 +6,7 @@
   "use strict";
 
   const TYPES = Object.freeze({
+    SYMBOL: "symbol",
     CONSTANT: "constant",
     INTEGER: "integer",
     NEG: "neg",
@@ -21,6 +22,8 @@
   });
 
   const constant = (name) => ({ type: TYPES.CONSTANT, name });
+  // 仅用于未赋值函数的只读预览；存档校验不接受此类型。
+  const symbol = (name) => ({ type: TYPES.SYMBOL, name });
   const integer = (value) => ({ type: TYPES.INTEGER, value: Number(value) });
   const neg = (child) => ({ type: TYPES.NEG, child });
   const add = (left, right) => ({ type: TYPES.ADD, left, right });
@@ -44,6 +47,8 @@
 
   function canonicalKey(expression) {
     switch (expression.type) {
+      case TYPES.SYMBOL:
+        return `symbol:${expression.name}`;
       case TYPES.CONSTANT:
         return `const:${expression.name}`;
       case TYPES.INTEGER:
@@ -92,6 +97,9 @@
     const ownPrecedence = precedence(expression);
     let text;
     switch (expression.type) {
+      case TYPES.SYMBOL:
+        text = expression.name;
+        break;
       case TYPES.CONSTANT:
         text = expression.name === "pi" ? "π" : expression.name;
         break;
@@ -155,6 +163,9 @@
     const ownPrecedence = precedence(expression);
     let tex;
     switch (expression.type) {
+      case TYPES.SYMBOL:
+        tex = expression.name.replace(/_/g, "\\_");
+        break;
       case TYPES.CONSTANT:
         tex = expression.name === "pi" ? "\\pi" : expression.name;
         break;
@@ -359,6 +370,7 @@
   return {
     TYPES,
     constant,
+    symbol,
     integer,
     neg,
     add,

@@ -1,21 +1,29 @@
 (function (root, factory) {
   "use strict";
-  const api = factory();
+  const expression = typeof module === "object" && module.exports ? require("./expression.js") : root.EMLExpression;
+  const rules = typeof module === "object" && module.exports ? require("./formula-rules.js") : root.EMLFormulaRules;
+  const api = factory(expression, rules);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.EMLFunctionStructure = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Rules) {
   "use strict";
-
-  const MAX_NODES = 512;
-  const MAX_DEPTH = 32;
 
   function expand(node, definitions = []) {
     const available = new Map(definitions.map((definition) => [definition.name, definition]));
-    let remaining = MAX_NODES;
+    const memo = new WeakMap();
     const error = (message) => ({ type: "error", message });
     function visit(current, bindings, stack, depth) {
-      if (--remaining < 0 || depth > MAX_DEPTH) return error("结构展开已达到安全上限");
       if (!current) return { type: "hole", label: "□" };
+      let environments = memo.get(current);
+      if (!environments) memo.set(current, environments = new WeakMap());
+      let paths = environments.get(bindings);
+      if (!paths) environments.set(bindings, paths = new WeakMap());
+      if (paths.has(stack)) return paths.get(stack);
+      const result = expandNode(current, bindings, stack, depth);
+      paths.set(stack, result);
+      return result;
+    }
+    function expandNode(current, bindings, stack, depth) {
       if (current.type === "parameter") {
         const binding = bindings.get(current.name);
         return binding
@@ -52,5 +60,30 @@
     return visit(node, new Map(), new Set(), 0);
   }
 
-  return { expand, MAX_NODES, MAX_DEPTH };
+  function toEmlTree(structure) {
+    const memo = new WeakMap();
+    function convert(node) {
+      if (memo.has(node)) return memo.get(node);
+      const result = convertNode(node);
+      memo.set(node, result);
+      return result;
+    }
+    function convertNode(node) {
+    if (node.body) return convert(node.body);
+    if (node.type === "call") {
+      const inputs = node.inputs.map((input) => convert(input.node));
+      const invalid = inputs.find((input) => !input.expression);
+      if (invalid) return invalid;
+      const expression = Rules.simplify(Expr.sub(Expr.pow(Expr.E, inputs[0].expression), Expr.ln(inputs[1].expression))).expression;
+      return { type: "eml", result: Expr.render(expression), expression, inputs };
+    }
+    return {
+      type: "value", label: node.message || node.label,
+      expression: node.expression || (!node.message ? Expr.symbol(node.label) : null),
+    };
+    }
+    return convert(structure);
+  }
+
+  return { expand, toEmlTree };
 });
