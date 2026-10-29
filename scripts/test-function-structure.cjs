@@ -39,10 +39,14 @@ const server = http.createServer((request, response) => {
       await page.locator("#customDefinitionName").fill("f");
       await page.locator("#customDefinitionParameters").fill("x");
       await insert("#definitionFunctionSources", "EML", "root");
+      assert.equal(await page.locator("#definitionStructure").isVisible(), false, "拖入函数不自动显示结构");
+      await page.locator('[data-definition-path="root"] > .definition-call-name').click();
       assert.equal(await page.locator("#definitionStructure .structure-hole").count(), 2);
       assert.equal(await page.locator(".definition-slot").count(), 2);
       await insert("#definitionParameterSources", "x", "root.left");
+      assert.equal(await page.locator("#definitionStructure").isVisible(), false, "填写参数隐藏结构");
       await insert("#definitionValueSources", "1", "root.right");
+      await page.locator('[data-definition-path="root"] > .definition-call-name').click();
       assert.equal(await page.locator("#definitionStructure .structure-hole").count(), 0);
       assert.match(await page.locator("#definitionStructure").innerText(), /X:[\s\S]*x[\s\S]*Y:/);
       assert.equal(await snapshot(), baseline, "草稿与预览不得修改缓存");
@@ -72,6 +76,8 @@ const server = http.createServer((request, response) => {
       assert.equal(await page.locator("#definitionStructure .structure-call").count(), 5);
       assert.equal(await snapshot(), saved);
       await page.locator('[data-definition-path="root.right.arguments.0"]').click({ button: "right" });
+      assert.equal(await page.locator("#definitionStructure").isVisible(), false, "删除参数隐藏结构");
+      await rootButton.click();
       assert.equal(await page.locator("#definitionStructure .structure-hole").count(), 2, "实参与被替换形参均显示空槽");
       await insert("#definitionParameterSources", "y", "root.right.arguments.0");
       await rootButton.click();
@@ -81,6 +87,9 @@ const server = http.createServer((request, response) => {
       await page.getByRole("button", { name: "编辑函数", exact: true }).last().click();
       await page.locator('[data-definition-path="root"] > .definition-call-name').click();
       assert.equal(await page.locator("#definitionStructure").isVisible(), true);
+      await page.locator("#customDefinitionParameters").dispatchEvent("input");
+      assert.equal(await page.locator("#definitionStructure").isVisible(), false, "编辑签名隐藏结构");
+      await page.locator('[data-definition-path="root"] > .definition-call-name').click();
       const beforeCancel = await snapshot();
       await page.locator("#customCancelEditButton").click();
       assert.equal(await page.locator("#definitionStructure").isVisible(), false);

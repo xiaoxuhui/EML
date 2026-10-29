@@ -283,7 +283,7 @@
     const target = nodeAtDefinitionPath(path);
     if (!target.parent || !target.key) return;
     target.parent[target.key] = node;
-    if (node && ["eml", "call"].includes(node.type)) definitionDraft.previewPath = path;
+    definitionDraft.previewPath = null;
     definitionDraft.selectedPath = path;
     customDefinitionError = "";
     renderDefinitionBuilder();
@@ -1118,6 +1118,7 @@
   [elements.customDefinitionName, elements.customDefinitionParameters].forEach((input) => {
     input.addEventListener("input", () => {
       customDefinitionError = "";
+      definitionDraft.previewPath = null;
       renderDefinitionBuilder();
     });
   });
