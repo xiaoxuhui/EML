@@ -2,10 +2,11 @@
   const expression = typeof module === "object" && module.exports
     ? require("./expression.js")
     : root.EMLExpression;
-  const api = factory(expression);
+  const composition = typeof module === "object" && module.exports ? require("./eml-composition.js") : root.EMLComposition;
+  const api = factory(expression, composition);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.EMLValueStore = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Expr, Composition) {
   "use strict";
 
   const encodeId = (prefix, key) => `${prefix}:${encodeURIComponent(key)}`;
@@ -340,19 +341,40 @@
     return { state: next, status: "deleted" };
   }
 
-  function updateCustomFunction(state, functionId, definitionText, definitionAst) {
+  function updateCustomFunction(state, functionId, definitionText, definitionAst, newName) {
     const functions = getCustomFunctions(state);
     const current = functions.find((item) => item.id === functionId);
     if (!current || typeof definitionText !== "string" || !definitionAst) return { state, status: "invalid" };
     if (definitionAst.parameterNames.length !== current.inputValueIds.length) return { state, status: "input-count-changed" };
+    const name = newName ?? current.name;
+    if (typeof name !== "string" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(name) || name === "EML" || customFunctionIdFor(name).length > 120) return { state, status: "invalid-name" };
+    if (functions.some((item) => item.id !== functionId && item.name === name)) return { state, status: "duplicate-name" };
+    const updated = [];
+    for (const item of functions) {
+      const ast = item.id === functionId ? definitionAst : item.definitionAst;
+      const parsed = ast ? Composition.createDefinition(item.id === functionId ? name : item.name, ast.parameterNames, ast.body)
+        : Composition.parseDefinition(item.definitionText);
+      if (!parsed.ok) return { state, status: "invalid" };
+      const body = parsed.definition.body;
+      function renameCalls(node) {
+        if (node.type === "call") {
+          if (node.name === current.name) node.name = name;
+          node.arguments.forEach(renameCalls);
+        } else if (node.type === "eml") { renameCalls(node.left); renameCalls(node.right); }
+      }
+      renameCalls(body);
+      const changed = Composition.createDefinition(parsed.definition.name, parsed.definition.parameterNames, body);
+      if (!changed.ok || changed.definition.displayText.length > 1000) return { state, status: "invalid" };
+      updated.push({ ...item, id: item.id === functionId ? customFunctionIdFor(name) : item.id,
+        name: changed.definition.name, definitionText: changed.definition.displayText,
+        definitionAst: { parameterNames: changed.definition.parameterNames, body: changed.definition.body } });
+    }
+    const definitions = updated.map((item) => Composition.createDefinition(item.name, item.definitionAst.parameterNames, item.definitionAst.body).definition);
+    if (definitions.some((definition) => !Composition.validateDefinitionCalls(definition, definitions).ok)) return { state, status: "invalid" };
     const next = cloneState(state);
-    next.customFunctions = functions.map((item) => item.id === functionId ? {
-      ...item,
-      definitionText,
-      definitionAst,
-    } : item);
+    next.customFunctions = updated;
     delete next.customFunction;
-    return { state: next, status: "updated" };
+    return { state: next, status: "updated", functionId: customFunctionIdFor(name) };
   }
 
   function setCustomInput(state, functionId, inputIndex, valueId) {

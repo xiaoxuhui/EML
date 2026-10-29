@@ -166,6 +166,39 @@ test("VF08 编辑函数保留调用输入并更新表达式", () => {
   assert.equal(updated.definitionText, "f(x) = EML(1, x)");
 });
 
+test("编辑可重命名函数并原子更新引用，保留输入与旧状态", () => {
+  let state = Store.createInitialState();
+  for (const text of ["f(x) = EML(x, 1)", "g(y) = f(y)"]) {
+    const d = Composition.parseDefinition(text).definition;
+    state = Store.addCustomFunction(state, d.name, d.displayText, 1, { parameterNames: d.parameterNames, body: d.body }).state;
+  }
+  state = Store.setCustomInput(state, Store.customFunctionIdFor("f"), 0, Store.initialValueId);
+  const before = JSON.stringify(state);
+  const d = Composition.parseDefinition("h(x) = EML(x, 1)").definition;
+  const ast = { parameterNames: d.parameterNames, body: d.body };
+  const result = Store.updateCustomFunction(state, Store.customFunctionIdFor("f"), d.displayText, ast, "h");
+  assert.equal(result.status, "updated");
+  assert.equal(JSON.stringify(state), before);
+  const [h, g] = Store.getCustomFunctions(result.state);
+  assert.equal(h.name, "h");
+  assert.equal(h.id, Store.customFunctionIdFor("h"));
+  assert.equal(h.inputValueIds[0], Store.initialValueId);
+  assert.equal(g.definitionText, "g(y) = h(y)");
+  assert.equal(g.definitionAst.body.name, "h");
+  const definitions = [h, g].map((item) => Composition.createDefinition(item.name, item.definitionAst.parameterNames, item.definitionAst.body).definition);
+  assert.equal(Composition.evaluate(definitions[1], [Expr.ONE], definitions).displayText, "e");
+  const restored = require("../src/persistence.js").deserialize(require("../src/persistence.js").serialize(result.state));
+  assert.equal(restored.ok, true);
+  const addedOldName = Store.addCustomFunction(result.state, "f", "f(x) = EML(x, 1)", 1);
+  assert.equal(addedOldName.status, "added");
+  assert.equal(new Set(addedOldName.state.customFunctions.map((item) => item.id)).size, 3);
+  for (const name of ["g", "EML", "1bad"]) {
+    const rejected = Store.updateCustomFunction(state, Store.customFunctionIdFor("f"), d.displayText, ast, name);
+    assert.notEqual(rejected.status, "updated");
+    assert.equal(rejected.state, state);
+  }
+});
+
 test("MF09 已定义函数可被新函数调用并展开求值", () => {
   const f = Composition.parseDefinition("f(x) = EML(x, 1)").definition;
   const g = Composition.parseDefinition("g(x) = f(x)").definition;

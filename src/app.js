@@ -457,7 +457,7 @@
     const name = elements.customDefinitionName.value.trim() || "f";
     const parameters = draftParameters();
     const editing = Boolean(editingFunctionId);
-    elements.customDefinitionName.readOnly = editing;
+    elements.customDefinitionName.readOnly = false;
     elements.customDefinitionParameters.readOnly = editing;
     elements.customApply.textContent = editing ? "保存修改" : "保存定义";
     elements.customCancelEdit.hidden = !editing;
@@ -612,7 +612,7 @@
       elements.customFunctionApplications.appendChild(panel);
     }
     elements.customDefinitionStatus.textContent = customDefinitionError || (editingFunctionId
-      ? "正在编辑函数表达式。函数名和变量固定；把函数、变量或数值拖入空槽即可修改。"
+      ? "正在编辑函数。"
       : "拖入函数、变量或数值栏里的数值构造表达式；数值会作为固定表达式保存。点击来源后，再点击目标槽也可填入。");
     elements.customDefinitionStatus.classList.toggle("error", Boolean(customDefinitionError));
   }
@@ -1050,10 +1050,11 @@
     }
     const definitionAst = { parameterNames: parsed.definition.parameterNames, body: parsed.definition.body };
     const result = editingFunctionId
-      ? Store.updateCustomFunction(state, editingFunctionId, parsed.definition.displayText, definitionAst)
+      ? Store.updateCustomFunction(state, editingFunctionId, parsed.definition.displayText, definitionAst, parsed.definition.name)
       : Store.addCustomFunction(state, parsed.definition.name, parsed.definition.displayText, parsed.definition.parameterNames.length, definitionAst);
     if (!["added", "updated"].includes(result.status)) {
-      customDefinitionError = result.status === "duplicate-name" ? "同名函数已存在，请使用其他函数名。" : "函数定义无效。";
+      customDefinitionError = result.status === "duplicate-name" ? "同名函数已存在，请使用其他函数名。"
+        : result.status === "invalid-name" ? "函数名无效，且不能使用内置名称 EML。" : "函数定义无效。";
       render();
       return;
     }
