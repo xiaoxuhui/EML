@@ -173,12 +173,24 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .definition-source { min-height: 32px; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: #f7f9fa; color: #24313b; font-family: Cambria, "Times New Roman", serif; cursor: grab; }
 .definition-source:active { cursor: grabbing; }
 .definition-source.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
-.definition-slot { display: inline-flex; min-width: 42px; min-height: 30px; padding: 3px 7px; border: 1px dashed #7daab0; border-radius: 4px; background: #f4fbfc; color: #5e7b80; font-family: inherit; vertical-align: middle; cursor: pointer; }
+.definition-slot { display: inline-flex; min-width: 42px; min-height: 30px; padding: 3px 7px; border: 1px dashed #9da7ad; border-radius: 4px; background: #eef0f2; color: #58656d; font-family: inherit; vertical-align: middle; cursor: pointer; }
 .definition-slot.selected, .definition-slot.drag-over { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
 .definition-call { display: inline; white-space: nowrap; }
 .definition-call .definition-slot { margin: 0 2px; }
 .definition-leaf { cursor: context-menu; }
 .definition-call { cursor: context-menu; }
+.definition-call-name { border: 0; padding: 3px 2px; border-radius: 2px; background: transparent; color: var(--accent-dark); font: inherit; cursor: pointer; }
+.definition-call-name:hover { background: var(--accent-soft); }
+.definition-call-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.definition-structure { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; min-width: 0; }
+.definition-structure h3 { margin: 0 0 10px; font-size: 15px; }
+.definition-structure-tree { max-height: 440px; overflow: auto; padding: 4px 8px; font-size: 16px; }
+.structure-branches { margin: 4px 0 8px 6px; padding-left: 18px; border-left: 1px solid var(--line-strong); list-style: none; }
+.structure-branches > li { margin: 6px 0; }
+.structure-parameter { display: inline-block; margin-right: 8px; color: var(--muted); vertical-align: top; }
+.structure-node { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+.structure-hole { width: 34px; height: 28px; text-align: center; background: #eef0f2; border: 1px solid #9da7ad; color: #58656d; }
+.structure-error { color: var(--danger); }
 .custom-definition-status { min-height: 20px; margin-top: 5px; color: var(--muted); font-size: 13px; }
 .custom-definition-status.error { color: var(--danger); }
 .custom-formula-line { min-height: 56px; margin-top: 4px; }

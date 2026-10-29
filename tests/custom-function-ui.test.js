@@ -18,6 +18,8 @@ test("EML 与用户函数共享函数应用区，定义区只负责保存定义"
     "customDefinitionName",
     "customDefinitionParameters",
     "customDefinitionExpression",
+    "definitionStructure",
+    "definitionStructureTree",
     "definitionFunctionSources",
     "definitionParameterSources",
     "definitionValueSources",
@@ -27,6 +29,15 @@ test("EML 与用户函数共享函数应用区，定义区只负责保存定义"
   ]) {
     assert.match(template, new RegExp(`id="${id}"`));
   }
+});
+
+test("函数结构预览使用独立只读模块和可键盘激活的函数名按钮", () => {
+  const app = read("src/app.js");
+  assert.match(app, /FunctionStructure\.expand\(node, definitions\)/);
+  assert.match(app, /name\.type = "button"/);
+  const renderer = app.slice(app.indexOf("  function renderDefinitionStructure()"), app.indexOf("  function renderCustomCalculators()"));
+  assert.doesNotMatch(renderer, /commitState|persistState|\.evaluate\(/);
+  assert.match(read("scripts/build.mjs"), /"function-structure.js"/);
 });
 
 test("页面将动态槽位接入组合求值与原有添加机制", () => {

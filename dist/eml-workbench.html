@@ -182,12 +182,24 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 .definition-source { min-height: 32px; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: #f7f9fa; color: #24313b; font-family: Cambria, "Times New Roman", serif; cursor: grab; }
 .definition-source:active { cursor: grabbing; }
 .definition-source.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
-.definition-slot { display: inline-flex; min-width: 42px; min-height: 30px; padding: 3px 7px; border: 1px dashed #7daab0; border-radius: 4px; background: #f4fbfc; color: #5e7b80; font-family: inherit; vertical-align: middle; cursor: pointer; }
+.definition-slot { display: inline-flex; min-width: 42px; min-height: 30px; padding: 3px 7px; border: 1px dashed #9da7ad; border-radius: 4px; background: #eef0f2; color: #58656d; font-family: inherit; vertical-align: middle; cursor: pointer; }
 .definition-slot.selected, .definition-slot.drag-over { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
 .definition-call { display: inline; white-space: nowrap; }
 .definition-call .definition-slot { margin: 0 2px; }
 .definition-leaf { cursor: context-menu; }
 .definition-call { cursor: context-menu; }
+.definition-call-name { border: 0; padding: 3px 2px; border-radius: 2px; background: transparent; color: var(--accent-dark); font: inherit; cursor: pointer; }
+.definition-call-name:hover { background: var(--accent-soft); }
+.definition-call-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.definition-structure { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; min-width: 0; }
+.definition-structure h3 { margin: 0 0 10px; font-size: 15px; }
+.definition-structure-tree { max-height: 440px; overflow: auto; padding: 4px 8px; font-size: 16px; }
+.structure-branches { margin: 4px 0 8px 6px; padding-left: 18px; border-left: 1px solid var(--line-strong); list-style: none; }
+.structure-branches > li { margin: 6px 0; }
+.structure-parameter { display: inline-block; margin-right: 8px; color: var(--muted); vertical-align: top; }
+.structure-node { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+.structure-hole { width: 34px; height: 28px; text-align: center; background: #eef0f2; border: 1px solid #9da7ad; color: #58656d; }
+.structure-error { color: var(--danger); }
 .custom-definition-status { min-height: 20px; margin-top: 5px; color: var(--muted); font-size: 13px; }
 .custom-definition-status.error { color: var(--danger); }
 .custom-formula-line { min-height: 56px; margin-top: 4px; }
@@ -433,6 +445,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         <div><span class="definition-source-label">数值栏</span><div id="definitionValueSources" class="definition-source-list"></div></div>
       </div>
       <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
+      <div id="definitionStructure" class="definition-structure" hidden>
+        <h3>函数展开结构</h3>
+        <div id="definitionStructureTree" class="definition-structure-tree" aria-label="函数展开结构" tabindex="0"></div>
+      </div>
     </section>
 
     <section class="values-section" aria-labelledby="valuesTitle">
@@ -2720,6 +2736,65 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
 });
 
 
+/* function-structure.js */
+(function (root, factory) {
+  "use strict";
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.EMLFunctionStructure = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const MAX_NODES = 512;
+  const MAX_DEPTH = 32;
+
+  function expand(node, definitions = []) {
+    const available = new Map(definitions.map((definition) => [definition.name, definition]));
+    let remaining = MAX_NODES;
+    const error = (message) => ({ type: "error", message });
+    function visit(current, bindings, stack, depth) {
+      if (--remaining < 0 || depth > MAX_DEPTH) return error("结构展开已达到安全上限");
+      if (!current) return { type: "hole", label: "□" };
+      if (current.type === "parameter") {
+        const binding = bindings.get(current.name);
+        return binding
+          ? visit(binding.node, binding.bindings, binding.stack, depth + 1)
+          : { type: "parameter", label: current.name };
+      }
+      if (current.type === "constant") {
+        return { type: "constant", label: current.displayText, expression: current.expression };
+      }
+      if (current.type === "eml") {
+        return { type: "call", label: "EML", inputs: [
+          { label: "X", node: visit(current.left, bindings, stack, depth + 1) },
+          { label: "Y", node: visit(current.right, bindings, stack, depth + 1) },
+        ] };
+      }
+      if (current.type !== "call") return error("无法识别的表达式节点");
+      const target = available.get(current.name);
+      if (!target) return error(`函数 ${current.name} 未定义`);
+      if (stack.has(current.name)) return error(`函数 ${current.name} 存在循环引用`);
+      if (current.arguments.length !== target.parameterNames.length) return error(`函数 ${current.name} 参数数量不匹配`);
+      const inputs = target.parameterNames.map((name, index) => ({
+        label: name,
+        node: visit(current.arguments[index], bindings, stack, depth + 1),
+      }));
+      // 实参保留调用时的环境，不能被被调函数的同名形参重新捕获。
+      const nestedBindings = new Map(target.parameterNames.map((name, index) => [name, {
+        node: current.arguments[index], bindings, stack,
+      }]));
+      return {
+        type: "call", label: target.name, inputs,
+        body: visit(target.body, nestedBindings, new Set([...stack, current.name]), depth + 1),
+      };
+    }
+    return visit(node, new Map(), new Set(), 0);
+  }
+
+  return { expand, MAX_NODES, MAX_DEPTH };
+});
+
+
 /* value-store.js */
 (function (root, factory) {
   const expression = typeof module === "object" && module.exports
@@ -3800,6 +3875,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   const TreeController = root.EMLTreeController;
   const Trace = root.EMLDerivationTrace;
   const Composition = root.EMLComposition;
+  const FunctionStructure = root.EMLFunctionStructure;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -3832,6 +3908,8 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     customDefinitionParameters: document.getElementById("customDefinitionParameters"),
     customDefinitionSignature: document.getElementById("customDefinitionSignature"),
     customDefinitionExpression: document.getElementById("customDefinitionExpression"),
+    definitionStructure: document.getElementById("definitionStructure"),
+    definitionStructureTree: document.getElementById("definitionStructureTree"),
     definitionFunctionSources: document.getElementById("definitionFunctionSources"),
     definitionParameterSources: document.getElementById("definitionParameterSources"),
     definitionValueSources: document.getElementById("definitionValueSources"),
@@ -4029,7 +4107,17 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     call.className = "definition-call";
     call.dataset.definitionPath = path;
     call.title = "全部输入清空后，可右键删除此函数";
-    call.append(`${node.type === "eml" ? "EML" : node.name}(`);
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "definition-call-name";
+    name.textContent = node.type === "eml" ? "EML" : node.name;
+    name.setAttribute("aria-label", `查看 ${name.textContent} 的展开结构`);
+    name.addEventListener("click", (event) => {
+      event.stopPropagation();
+      definitionDraft.previewPath = path;
+      renderDefinitionStructure();
+    });
+    call.append(name, "(");
     const children = node.type === "eml" ? [node.left, node.right] : node.arguments;
     children.forEach((child, index) => {
       if (index > 0) call.append(", ");
@@ -4052,6 +4140,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     const target = nodeAtDefinitionPath(path);
     if (!target.parent || !target.key) return;
     target.parent[target.key] = node;
+    if (node && ["eml", "call"].includes(node.type)) definitionDraft.previewPath = path;
     definitionDraft.selectedPath = path;
     customDefinitionError = "";
     renderDefinitionBuilder();
@@ -4155,6 +4244,49 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         }));
       }
     });
+    renderDefinitionStructure();
+  }
+
+  function renderDefinitionStructure() {
+    const path = definitionDraft.previewPath;
+    const target = path && nodeAtDefinitionPath(path);
+    const node = target?.parent?.[target.key];
+    elements.definitionStructure.hidden = !node || !["eml", "call"].includes(node.type);
+    elements.definitionStructureTree.replaceChildren();
+    if (elements.definitionStructure.hidden) return;
+    const definitions = Store.getCustomFunctions(state).map(definitionForCustom)
+      .filter((parsed) => parsed.ok).map((parsed) => parsed.definition);
+    const tree = FunctionStructure.expand(node, definitions);
+    function appendNode(parent, entry) {
+      const line = document.createElement("div");
+      line.className = `structure-node structure-${entry.type}`;
+      if (entry.type === "constant") setMath(line, entry.expression, entry.label);
+      else line.textContent = entry.message || entry.label;
+      parent.appendChild(line);
+      if (entry.type !== "call") return;
+      const branches = document.createElement("ul");
+      branches.className = "structure-branches";
+      for (const input of entry.inputs) {
+        const branch = document.createElement("li");
+        const label = document.createElement("span");
+        label.className = "structure-parameter";
+        label.textContent = `${input.label}:`;
+        branch.appendChild(label);
+        appendNode(branch, input.node);
+        branches.appendChild(branch);
+      }
+      if (entry.body) {
+        const body = document.createElement("li");
+        const label = document.createElement("span");
+        label.className = "structure-parameter";
+        label.textContent = "展开:";
+        body.appendChild(label);
+        appendNode(body, entry.body);
+        branches.appendChild(body);
+      }
+      parent.appendChild(branches);
+    }
+    appendNode(elements.definitionStructureTree, tree);
   }
 
   function renderCustomCalculators() {

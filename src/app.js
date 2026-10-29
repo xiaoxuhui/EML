@@ -9,6 +9,7 @@
   const TreeController = root.EMLTreeController;
   const Trace = root.EMLDerivationTrace;
   const Composition = root.EMLComposition;
+  const FunctionStructure = root.EMLFunctionStructure;
 
   const elements = {
     slotX: document.getElementById("slotX"),
@@ -41,6 +42,8 @@
     customDefinitionParameters: document.getElementById("customDefinitionParameters"),
     customDefinitionSignature: document.getElementById("customDefinitionSignature"),
     customDefinitionExpression: document.getElementById("customDefinitionExpression"),
+    definitionStructure: document.getElementById("definitionStructure"),
+    definitionStructureTree: document.getElementById("definitionStructureTree"),
     definitionFunctionSources: document.getElementById("definitionFunctionSources"),
     definitionParameterSources: document.getElementById("definitionParameterSources"),
     definitionValueSources: document.getElementById("definitionValueSources"),
@@ -238,7 +241,17 @@
     call.className = "definition-call";
     call.dataset.definitionPath = path;
     call.title = "全部输入清空后，可右键删除此函数";
-    call.append(`${node.type === "eml" ? "EML" : node.name}(`);
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "definition-call-name";
+    name.textContent = node.type === "eml" ? "EML" : node.name;
+    name.setAttribute("aria-label", `查看 ${name.textContent} 的展开结构`);
+    name.addEventListener("click", (event) => {
+      event.stopPropagation();
+      definitionDraft.previewPath = path;
+      renderDefinitionStructure();
+    });
+    call.append(name, "(");
     const children = node.type === "eml" ? [node.left, node.right] : node.arguments;
     children.forEach((child, index) => {
       if (index > 0) call.append(", ");
@@ -261,6 +274,7 @@
     const target = nodeAtDefinitionPath(path);
     if (!target.parent || !target.key) return;
     target.parent[target.key] = node;
+    if (node && ["eml", "call"].includes(node.type)) definitionDraft.previewPath = path;
     definitionDraft.selectedPath = path;
     customDefinitionError = "";
     renderDefinitionBuilder();
@@ -364,6 +378,49 @@
         }));
       }
     });
+    renderDefinitionStructure();
+  }
+
+  function renderDefinitionStructure() {
+    const path = definitionDraft.previewPath;
+    const target = path && nodeAtDefinitionPath(path);
+    const node = target?.parent?.[target.key];
+    elements.definitionStructure.hidden = !node || !["eml", "call"].includes(node.type);
+    elements.definitionStructureTree.replaceChildren();
+    if (elements.definitionStructure.hidden) return;
+    const definitions = Store.getCustomFunctions(state).map(definitionForCustom)
+      .filter((parsed) => parsed.ok).map((parsed) => parsed.definition);
+    const tree = FunctionStructure.expand(node, definitions);
+    function appendNode(parent, entry) {
+      const line = document.createElement("div");
+      line.className = `structure-node structure-${entry.type}`;
+      if (entry.type === "constant") setMath(line, entry.expression, entry.label);
+      else line.textContent = entry.message || entry.label;
+      parent.appendChild(line);
+      if (entry.type !== "call") return;
+      const branches = document.createElement("ul");
+      branches.className = "structure-branches";
+      for (const input of entry.inputs) {
+        const branch = document.createElement("li");
+        const label = document.createElement("span");
+        label.className = "structure-parameter";
+        label.textContent = `${input.label}:`;
+        branch.appendChild(label);
+        appendNode(branch, input.node);
+        branches.appendChild(branch);
+      }
+      if (entry.body) {
+        const body = document.createElement("li");
+        const label = document.createElement("span");
+        label.className = "structure-parameter";
+        label.textContent = "展开:";
+        body.appendChild(label);
+        appendNode(body, entry.body);
+        branches.appendChild(body);
+      }
+      parent.appendChild(branches);
+    }
+    appendNode(elements.definitionStructureTree, tree);
   }
 
   function renderCustomCalculators() {
