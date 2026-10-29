@@ -40,6 +40,20 @@ test("函数结构预览使用独立只读模块和可键盘激活的函数名�
   assert.match(read("scripts/build.mjs"), /"function-structure.js"/);
 });
 
+test("函数定义复用应用输入框、数值数学排版和指针拖动", () => {
+  const app = read("src/app.js");
+  assert.match(app, /slot\.className = "input-slot definition-slot"/);
+  assert.match(app, /setMath\(value, node\.expression, node\.displayText\)/);
+  assert.match(app, /setMath\(source, payload\.expression, label\)/);
+  assert.match(app, /bindSourcePointerDrag\(source/);
+  assert.match(app, /bindSourcePointerDrag\(button/);
+  assert.match(app, /"pointercancel", "lostpointercapture"/);
+  assert.doesNotMatch(app, /let suppressValueClick/);
+  assert.match(app, /source\.cloneNode\(true\)/);
+  assert.match(app, /source-drag-preview/);
+  assert.match(app, /clearGhost\(\)/);
+});
+
 test("页面将动态槽位接入组合求值与原有添加机制", () => {
   const app = read("src/app.js");
   assert.match(app, /Composition\.parseDefinition/);

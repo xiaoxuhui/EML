@@ -62,8 +62,6 @@
   const presentationCache = new Map();
   let definitionDraft = { body: null, selectedPath: "root", pendingSource: null };
   let editingFunctionId = null;
-  let pointerDrag = null;
-  let suppressValueClick = false;
   let treeDepth = Infinity;
   const treeController = TreeController.create({
     viewport: elements.calculationTreeViewport,
@@ -214,10 +212,10 @@
     return elements.customDefinitionParameters.value.split(",").map((name) => name.trim()).filter(Boolean);
   }
 
-  function definitionSlot(path, label = "拖入") {
+  function definitionSlot(path, label = "表达式") {
     const slot = document.createElement("button");
     slot.type = "button";
-    slot.className = "definition-slot";
+    slot.className = "input-slot definition-slot";
     slot.dataset.definitionPath = path;
     slot.textContent = label;
     slot.title = "拖入函数、变量或数值";
@@ -226,13 +224,14 @@
     return slot;
   }
 
-  function renderDefinitionNode(node, path) {
-    if (!node) return definitionSlot(path);
+  function renderDefinitionNode(node, path, label) {
+    if (!node) return definitionSlot(path, label);
     if (node.type === "parameter" || node.type === "constant") {
-      const value = document.createElement("span");
-      value.className = "definition-leaf";
+      const value = definitionSlot(path, label);
+      value.classList.add("definition-leaf", "filled");
       value.dataset.definitionPath = path;
-      value.textContent = node.type === "parameter" ? node.name : node.displayText;
+      if (node.type === "constant") setMath(value, node.expression, node.displayText);
+      else value.textContent = node.name;
       value.title = "右键删除此输入";
       bindDefinitionNode(value, path, () => true);
       return value;
@@ -243,7 +242,7 @@
     call.title = "全部输入清空后，可右键删除此函数";
     const name = document.createElement("button");
     name.type = "button";
-    name.className = "definition-call-name";
+    name.className = "formula-name definition-call-name";
     name.textContent = node.type === "eml" ? "EML" : node.name;
     name.setAttribute("aria-label", `查看 ${name.textContent} 的展开结构`);
     name.addEventListener("click", (event) => {
@@ -251,13 +250,23 @@
       definitionDraft.previewPath = path;
       renderDefinitionStructure();
     });
-    call.append(name, "(");
+    call.appendChild(name);
+    const punctuation = (text) => {
+      const symbol = document.createElement("span");
+      symbol.className = "formula-punctuation";
+      symbol.textContent = text;
+      return symbol;
+    };
+    call.appendChild(punctuation("("));
     const children = node.type === "eml" ? [node.left, node.right] : node.arguments;
+    const targetDefinition = node.type === "call" ? Store.getCustomFunctions(state)
+      .map(definitionForCustom).find((parsed) => parsed.ok && parsed.definition.name === node.name)?.definition : null;
     children.forEach((child, index) => {
-      if (index > 0) call.append(", ");
-      call.appendChild(renderDefinitionNode(child, `${path}.${node.type === "eml" ? (index === 0 ? "left" : "right") : `arguments.${index}`}`));
+      if (index > 0) call.appendChild(punctuation(","));
+      const parameter = node.type === "eml" ? (index === 0 ? "x" : "y") : targetDefinition?.parameterNames[index] || `参数${index + 1}`;
+      call.appendChild(renderDefinitionNode(child, `${path}.${node.type === "eml" ? (index === 0 ? "left" : "right") : `arguments.${index}`}`, parameter));
     });
-    call.append(")");
+    call.appendChild(punctuation(")"));
     bindDefinitionNode(call, path, () => children.every((child) => !child));
     return call;
   }
@@ -289,9 +298,11 @@
   function definitionSource(kind, label, payload) {
     const source = document.createElement("button");
     source.type = "button";
-    source.className = "definition-source";
-    source.textContent = label;
-    source.draggable = true;
+    source.className = `definition-source ${kind === "value" ? "value-button" : kind === "function" ? "formula-name" : ""}`;
+    if (kind === "value") setMath(source, payload.expression, label);
+    else source.textContent = label;
+    source.draggable = false;
+    bindSourcePointerDrag(source, () => ({ kind, payload }));
     source.addEventListener("dragstart", (event) => {
       event.dataTransfer.setData("application/x-eml-definition-source", JSON.stringify({ kind, payload }));
       event.dataTransfer.effectAllowed = "copy";
@@ -329,10 +340,98 @@
     });
     slot.addEventListener("click", () => {
       if (definitionDraft.pendingSource) applyDefinitionSource(definitionDraft.pendingSource, path);
+      else if (state.selectedValueId) {
+        const value = currentValue(state.selectedValueId);
+        const presentation = presentationFor(value);
+        applyDefinitionSource({ kind: "value", payload: { ...presentation, valueId: value.id } }, path);
+      }
       else {
         definitionDraft.selectedPath = path;
         renderDefinitionBuilder();
       }
+    });
+  }
+
+  function bindSourcePointerDrag(source, getPayload) {
+    let drag = null;
+    let ghost = null;
+    let suppressClick = false;
+    const clearTargets = () => document.querySelectorAll(".input-slot.drag-over")
+      .forEach((slot) => slot.classList.remove("drag-over"));
+    const clearGhost = () => {
+      ghost?.remove();
+      ghost = null;
+      source.classList.remove("drag-source-active");
+    };
+    const moveGhost = (event) => {
+      if (!ghost) {
+        const bounds = source.getBoundingClientRect();
+        ghost = source.cloneNode(true);
+        ghost.removeAttribute("id");
+        ghost.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"));
+        ghost.classList.add("source-drag-preview");
+        ghost.inert = true;
+        ghost.tabIndex = -1;
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.style.width = `${Math.min(bounds.width, innerWidth - 16)}px`;
+        ghost.style.height = `${bounds.height}px`;
+        document.body.appendChild(ghost);
+        source.classList.add("drag-source-active");
+      }
+      const bounds = ghost.getBoundingClientRect();
+      const top = event.pointerType === "touch" ? event.clientY - bounds.height - 18 : event.clientY + 14;
+      ghost.style.left = `${Math.max(8, Math.min(event.clientX + 14, innerWidth - bounds.width - 8))}px`;
+      ghost.style.top = `${Math.max(8, Math.min(top, innerHeight - bounds.height - 8))}px`;
+    };
+    const targetAt = (event, payload) => {
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot");
+      return target && (target.classList.contains("definition-slot") ||
+        (payload.kind === "value" && payload.payload.valueId && target.dataset.slot)) ? target : null;
+    };
+    source.addEventListener("click", (event) => {
+      if (!suppressClick || !event.isTrusted) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+    source.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      drag = { x: event.clientX, y: event.clientY, id: event.pointerId, payload: getPayload(), active: false };
+      source.setPointerCapture(event.pointerId);
+    });
+    source.addEventListener("pointermove", (event) => {
+      if (!drag || drag.id !== event.pointerId) return;
+      if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 6) drag.active = true;
+      if (!drag.active) return;
+      event.preventDefault();
+      moveGhost(event);
+      clearTargets();
+      targetAt(event, drag.payload)?.classList.add("drag-over");
+    });
+    source.addEventListener("pointerup", (event) => {
+      if (!drag || drag.id !== event.pointerId) return;
+      const finished = drag;
+      drag = null;
+      clearTargets();
+      clearGhost();
+      if (!finished.active) {
+        if (event.pointerType === "touch") {
+          // 显式激活轻触，避免拖动/取消后浏览器不再合成click；拦住随后可能补发的原生click。
+          suppressClick = true;
+          source.click();
+          setTimeout(() => { suppressClick = false; }, 500);
+        }
+        return;
+      }
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 0);
+      const target = targetAt(event, finished.payload);
+      if (target?.classList.contains("definition-slot")) applyDefinitionSource(finished.payload, target.dataset.definitionPath);
+      else if (target) assignInput(target.dataset.slot, finished.payload.payload.valueId);
+    });
+    for (const event of ["pointercancel", "lostpointercapture"]) source.addEventListener(event, () => {
+      drag = null;
+      clearTargets();
+      clearGhost();
     });
   }
 
@@ -559,47 +658,14 @@
       button.draggable = false;
       button.setAttribute("aria-pressed", String(state.selectedValueId === valueId));
       button.addEventListener("click", () => {
-        if (suppressValueClick) {
-          suppressValueClick = false;
-          return;
-        }
         state = Store.selectValue(state, valueId);
         persistState();
         showNotice("");
         render();
       });
-      button.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0) return;
-        pointerDrag = { valueId, startX: event.clientX, startY: event.clientY, active: false, pointerId: event.pointerId };
-        button.setPointerCapture(event.pointerId);
-      });
-      button.addEventListener("pointermove", (event) => {
-        if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
-        const distance = Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY);
-        if (distance > 6) pointerDrag.active = true;
-        if (!pointerDrag.active) return;
-        event.preventDefault();
-        document.querySelectorAll(".input-slot, .definition-slot").forEach((slot) => slot.classList.remove("drag-over"));
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
-        if (target) target.classList.add("drag-over");
-      });
-      button.addEventListener("pointerup", (event) => {
-        if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
-        const drag = pointerDrag;
-        pointerDrag = null;
-        document.querySelectorAll(".input-slot, .definition-slot").forEach((slot) => slot.classList.remove("drag-over"));
-        if (!drag.active) return;
-        suppressValueClick = true;
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".input-slot, .definition-slot");
-        if (target?.classList.contains("definition-slot")) {
-          const presentation = presentationFor(value);
-          applyDefinitionSource({ kind: "value", payload: {
-            expression: presentation.expression,
-            displayText: presentation.displayText,
-            valueId,
-          } }, target.dataset.definitionPath);
-        } else if (target) assignInput(target.dataset.slot, drag.valueId);
-      });
+      bindSourcePointerDrag(button, () => ({ kind: "value", payload: {
+        ...presentationFor(value), valueId,
+      } }));
 
       item.appendChild(button);
       if (!value.protected) item.appendChild(makeDeleteButton(valueId));

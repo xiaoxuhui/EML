@@ -101,6 +101,7 @@ const server = http.createServer((request, response) => {
       await page.screenshot({ path: path.join(out, mobile ? "mobile.png" : "desktop.png") });
       console.log(`${mobile ? "mobile" : "desktop"}: interaction assertions passed; no page/resource errors`);
       await context.close();
+      await require("./check-unified-editor.cjs")(browser, mobile, `http://127.0.0.1:${server.address().port}/eml-workbench.html`);
     }
   } finally {
     await browser.close();
