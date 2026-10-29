@@ -110,6 +110,9 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
   font-family: Cambria, "Times New Roman", serif;
   font-size: 25px;
 }
+.application-function-name { border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
+.application-function-name:hover { background: var(--accent-soft); }
+.application-function-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .input-slot, .result-slot {
   flex: 0 0 auto;

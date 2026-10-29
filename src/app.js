@@ -27,6 +27,8 @@
     detailsEmpty: document.getElementById("detailsEmpty"),
     detailsContent: document.getElementById("detailsContent"),
     selectedValue: document.getElementById("selectedValue"),
+    selectedDetailLabel: document.getElementById("selectedDetailLabel"),
+    traceDetailBlock: document.getElementById("traceDetailBlock"),
     directFormulaList: document.getElementById("directFormulaList"),
     traceSummary: document.getElementById("traceSummary"),
     derivationTrace: document.getElementById("derivationTrace"),
@@ -62,6 +64,7 @@
   const presentationCache = new Map();
   let definitionDraft = { body: null, selectedPath: "root", pendingSource: null };
   let editingFunctionId = null;
+  let applicationStructureId = null;
   let treeDepth = Infinity;
   const treeController = TreeController.create({
     viewport: elements.calculationTreeViewport,
@@ -284,9 +287,11 @@
     if (!target.parent || !target.key) return;
     target.parent[target.key] = node;
     definitionDraft.previewPath = null;
+    applicationStructureId = null;
     definitionDraft.selectedPath = path;
     customDefinitionError = "";
     renderDefinitionBuilder();
+    renderDetails();
   }
 
   function functionNode(name, inputCount) {
@@ -490,6 +495,10 @@
     const definitions = Store.getCustomFunctions(state).map(definitionForCustom)
       .filter((parsed) => parsed.ok).map((parsed) => parsed.definition);
     const tree = FunctionStructure.expand(node, definitions);
+    appendFunctionStructure(elements.definitionStructureTree, tree);
+  }
+
+  function appendFunctionStructure(container, tree) {
     function appendNode(parent, entry) {
       const line = document.createElement("div");
       line.className = `structure-node structure-${entry.type}`;
@@ -510,16 +519,12 @@
       }
       if (entry.body) {
         const body = document.createElement("li");
-        const label = document.createElement("span");
-        label.className = "structure-parameter";
-        label.textContent = "展开:";
-        body.appendChild(label);
         appendNode(body, entry.body);
         branches.appendChild(body);
       }
       parent.appendChild(branches);
     }
-    appendNode(elements.definitionStructureTree, tree);
+    appendNode(container, tree);
   }
 
   function renderCustomCalculators() {
@@ -537,10 +542,17 @@
       panel.className = "custom-calculator";
       const line = document.createElement("div");
       line.className = "formula-line custom-formula-line";
-      const name = document.createElement("span");
-      name.className = "formula-name";
-      name.textContent = `${definition.name}(`;
+      const name = document.createElement("button");
+      name.type = "button";
+      name.className = "formula-name application-function-name";
+      name.textContent = definition.name;
+      name.setAttribute("aria-label", `查看 ${definition.name} 的计算树`);
+      name.addEventListener("click", () => showApplicationStructure(custom.id));
       line.appendChild(name);
+      const opening = document.createElement("span");
+      opening.className = "formula-punctuation";
+      opening.textContent = "(";
+      line.appendChild(opening);
       const slots = document.createElement("span");
       slots.className = "custom-input-slots";
       definition.parameterNames.forEach((parameterName, index) => {
@@ -658,6 +670,7 @@
       button.draggable = false;
       button.setAttribute("aria-pressed", String(state.selectedValueId === valueId));
       button.addEventListener("click", () => {
+        applicationStructureId = null;
         state = Store.selectValue(state, valueId);
         persistState();
         showNotice("");
@@ -877,7 +890,51 @@
     }
   }
 
+  function showApplicationStructure(id) {
+    applicationStructureId = id;
+    definitionDraft.previewPath = null;
+    renderDefinitionStructure();
+    renderDetails();
+    elements.calculationTreeViewport.scrollIntoView({ block: "center" });
+  }
+
+  function renderApplicationStructure() {
+    if (!applicationStructureId) return false;
+    const functions = Store.getCustomFunctions(state);
+    const definitions = functions.map(definitionForCustom).filter((parsed) => parsed.ok).map((parsed) => parsed.definition);
+    const custom = functions.find((item) => item.id === applicationStructureId);
+    const definition = custom && definitions.find((item) => item.name === custom.name);
+    if (applicationStructureId !== "EML" && !definition) {
+      applicationStructureId = null;
+      return false;
+    }
+    const names = definition?.parameterNames || ["x", "y"];
+    const ids = custom?.inputValueIds || [state.inputXId, state.inputYId];
+    const args = names.map((name, index) => {
+      const value = currentValue(ids[index]);
+      const presentation = value && presentationFor(value);
+      return value ? { type: "constant", expression: presentation.expression, displayText: presentation.displayText }
+        : { type: "parameter", name };
+    });
+    const node = definition ? { type: "call", name: definition.name, arguments: args }
+      : { type: "eml", left: args[0], right: args[1] };
+    elements.detailsEmpty.hidden = true;
+    elements.detailsContent.hidden = false;
+    elements.selectedDetailLabel.textContent = "当前函数：";
+    elements.selectedValue.textContent = `${definition?.name || "EML"}(${names.join(", ")})`;
+    elements.traceDetailBlock.hidden = true;
+    elements.directFormulaList.textContent = definition?.displayText || "EML(x, y) = e^x - ln(y)";
+    elements.calculationTree.replaceChildren();
+    treeController.ensureValue(`function:${applicationStructureId}`);
+    appendFunctionStructure(elements.calculationTree, FunctionStructure.expand(node, definitions));
+    treeController.apply();
+    return true;
+  }
+
   function renderDetails() {
+    if (renderApplicationStructure()) return;
+    elements.selectedDetailLabel.textContent = "当前数值：";
+    elements.traceDetailBlock.hidden = false;
     const details = Store.getDetails(state, state.selectedValueId, {
       maxDepth: treeDepth,
       maxNodes: Infinity,
@@ -972,6 +1029,7 @@
 
   bindSlot(elements.slotX, "x");
   bindSlot(elements.slotY, "y");
+  document.getElementById("emlApplicationName").addEventListener("click", () => showApplicationStructure("EML"));
 
   elements.customApply.addEventListener("click", () => {
     const parsed = Composition.createDefinition(
@@ -1050,6 +1108,7 @@
   }
 
   function startEditCustomFunction(custom) {
+    applicationStructureId = null;
     const parsed = definitionForCustom(custom);
     if (!parsed.ok) {
       showNotice("该函数定义无法载入编辑器。", true);
@@ -1119,7 +1178,9 @@
     input.addEventListener("input", () => {
       customDefinitionError = "";
       definitionDraft.previewPath = null;
+      applicationStructureId = null;
       renderDefinitionBuilder();
+      renderDetails();
     });
   });
 

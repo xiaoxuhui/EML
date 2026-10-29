@@ -31,7 +31,7 @@
     <section class="calculator" aria-labelledby="calculatorTitle">
       <h2 id="calculatorTitle">函数应用</h2>
       <div class="formula-line">
-        <span class="formula-name">EML(</span>
+        <button type="button" class="formula-name application-function-name" id="emlApplicationName" aria-label="查看 EML 的计算树">EML</button><span class="formula-punctuation">(</span>
         <button type="button" class="input-slot" id="slotX" data-slot="x" aria-label="x 输入位置">x</button>
         <span class="formula-punctuation">,</span>
         <button type="button" class="input-slot" id="slotY" data-slot="y" aria-label="y 输入位置">y</button>
@@ -64,7 +64,7 @@
       </div>
       <div id="customDefinitionStatus" class="custom-definition-status" role="status" aria-live="polite"></div>
       <div id="definitionStructure" class="definition-structure" hidden>
-        <h3>函数展开结构</h3>
+        <h3>函数结构</h3>
         <div id="definitionStructureTree" class="definition-structure-tree" aria-label="函数展开结构" tabindex="0"></div>
       </div>
     </section>
@@ -85,12 +85,12 @@
       </div>
       <div class="details-empty" id="detailsEmpty">选择一个数值查看公式来源</div>
       <div class="details-content" id="detailsContent" hidden>
-        <div class="selected-value-line">当前数值：<strong id="selectedValue"></strong></div>
+        <div class="selected-value-line"><span id="selectedDetailLabel">当前数值：</span><strong id="selectedValue"></strong></div>
         <div class="detail-block">
           <h3>直接公式</h3>
           <div id="directFormulaList"></div>
         </div>
-        <div class="detail-block">
+        <div class="detail-block" id="traceDetailBlock">
           <div class="trace-heading">
             <h3>推导过程</h3>
             <span id="traceSummary" class="trace-summary" aria-live="polite"></span>
