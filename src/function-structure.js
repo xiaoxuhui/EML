@@ -31,7 +31,7 @@
           : { type: "parameter", label: current.name };
       }
       if (current.type === "constant") {
-        return { type: "constant", label: current.displayText, expression: current.expression };
+        return { type: "constant", label: current.displayText, expression: current.expression, sourceValueId: current.sourceValueId };
       }
       if (current.type === "eml") {
         return { type: "call", label: "EML", inputs: [
@@ -69,18 +69,22 @@
       return result;
     }
     function convertNode(node) {
-    if (node.body) return convert(node.body);
-    if (node.type === "call") {
-      const inputs = node.inputs.map((input) => convert(input.node));
-      const invalid = inputs.find((input) => !input.expression);
-      if (invalid) return invalid;
-      const expression = Rules.simplify(Expr.sub(Expr.pow(Expr.E, inputs[0].expression), Expr.ln(inputs[1].expression))).expression;
-      return { type: "eml", result: Expr.render(expression), expression, inputs };
-    }
-    return {
-      type: "value", label: node.message || node.label,
-      expression: node.expression || (!node.message ? Expr.symbol(node.label) : null),
-    };
+      if (node.body) return convert(node.body);
+      if (node.type === "call") {
+        const inputs = node.inputs.map((input) => convert(input.node));
+        const invalid = inputs.find((input) => !input.expression);
+        if (invalid) return { type: "eml", result: "未定义", expression: null, inputs, error: "输入未定义" };
+        if (Expr.isInteger(inputs[1].expression, 0)) {
+          return { type: "eml", result: "未定义", expression: null, inputs, error: "ln(0) 未定义" };
+        }
+        const expression = Rules.simplify(Expr.sub(Expr.pow(Expr.E, inputs[0].expression), Expr.ln(inputs[1].expression))).expression;
+        return { type: "eml", result: Expr.render(expression), expression, inputs };
+      }
+      return {
+        type: "value", label: node.message || node.label,
+        expression: node.expression || (!node.message ? Expr.symbol(node.label) : null),
+        ...(node.type === "constant" ? { sourceValueId: node.sourceValueId, provenance: "definition-constant" } : {}),
+      };
     }
     return convert(structure);
   }

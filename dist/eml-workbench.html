@@ -2785,7 +2785,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
           : { type: "parameter", label: current.name };
       }
       if (current.type === "constant") {
-        return { type: "constant", label: current.displayText, expression: current.expression };
+        return { type: "constant", label: current.displayText, expression: current.expression, sourceValueId: current.sourceValueId };
       }
       if (current.type === "eml") {
         return { type: "call", label: "EML", inputs: [
@@ -2823,18 +2823,22 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
       return result;
     }
     function convertNode(node) {
-    if (node.body) return convert(node.body);
-    if (node.type === "call") {
-      const inputs = node.inputs.map((input) => convert(input.node));
-      const invalid = inputs.find((input) => !input.expression);
-      if (invalid) return invalid;
-      const expression = Rules.simplify(Expr.sub(Expr.pow(Expr.E, inputs[0].expression), Expr.ln(inputs[1].expression))).expression;
-      return { type: "eml", result: Expr.render(expression), expression, inputs };
-    }
-    return {
-      type: "value", label: node.message || node.label,
-      expression: node.expression || (!node.message ? Expr.symbol(node.label) : null),
-    };
+      if (node.body) return convert(node.body);
+      if (node.type === "call") {
+        const inputs = node.inputs.map((input) => convert(input.node));
+        const invalid = inputs.find((input) => !input.expression);
+        if (invalid) return { type: "eml", result: "未定义", expression: null, inputs, error: "输入未定义" };
+        if (Expr.isInteger(inputs[1].expression, 0)) {
+          return { type: "eml", result: "未定义", expression: null, inputs, error: "ln(0) 未定义" };
+        }
+        const expression = Rules.simplify(Expr.sub(Expr.pow(Expr.E, inputs[0].expression), Expr.ln(inputs[1].expression))).expression;
+        return { type: "eml", result: Expr.render(expression), expression, inputs };
+      }
+      return {
+        type: "value", label: node.message || node.label,
+        expression: node.expression || (!node.message ? Expr.symbol(node.label) : null),
+        ...(node.type === "constant" ? { sourceValueId: node.sourceValueId, provenance: "definition-constant" } : {}),
+      };
     }
     return convert(structure);
   }
@@ -4660,6 +4664,10 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
         value.append("（初始值）");
       } else if (source?.derivations?.length) {
         source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation, true)));
+      } else if (node?.provenance === "definition-constant") {
+        value.append(node.sourceValueId && !source
+          ? "（函数定义中的固定值；原来源已不存在）"
+          : "（函数定义中的固定值；未记录生成来源）");
       }
       return value;
     }
@@ -4673,6 +4681,12 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     heading.className = "expanded-eml-heading";
     heading.textContent = `EML(${argumentText(node.inputs?.[0])}, ${argumentText(node.inputs?.[1])}) = ${node.result || "?"}`;
     element.appendChild(heading);
+    if (node.error) {
+      const error = document.createElement("div");
+      error.className = "notice error";
+      error.textContent = node.error;
+      element.appendChild(error);
+    }
     const inputs = document.createElement("div");
     inputs.className = "expanded-eml-inputs";
     ["x", "y"].forEach((name, index) => {
@@ -4858,7 +4872,13 @@ h3 { margin: 0 0 10px; font-size: 14px; color: #34434d; }
     elements.directFormulaList.textContent = tree.label || `EML(${tree.inputs.map((input) => input.label || input.result).join(", ")}) = ${tree.result}`;
     elements.calculationTree.replaceChildren();
     treeController.ensureValue(`function:${applicationStructureId}`);
-    elements.calculationTree.appendChild(renderExpandedEml(tree, true));
+    const attachFixedSources = (entry) => {
+      if (entry.type === "eml") return { ...entry, inputs: entry.inputs.map(attachFixedSources) };
+      if (entry.provenance !== "definition-constant") return entry;
+      const id = entry.sourceValueId || (Expr.isInteger(entry.expression, 1) ? Store.initialValueId : null);
+      return id && state.values[id] ? { ...entry, source: Store.buildValueTree(state, id, { maxDepth: Infinity, maxNodes: Infinity }) } : entry;
+    };
+    elements.calculationTree.appendChild(renderExpandedEml(attachFixedSources(tree), true));
     treeController.apply();
     return true;
   }

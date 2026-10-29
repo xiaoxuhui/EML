@@ -161,6 +161,7 @@ const server = http.createServer((request, response) => {
       console.log(`${mobile ? "mobile" : "desktop"}: interaction assertions passed; no page/resource errors`);
       await context.close();
       await require("./check-unified-editor.cjs")(browser, mobile, `http://127.0.0.1:${server.address().port}/eml-workbench.html`);
+      await require("./check-function-provenance.cjs")(browser, mobile, `http://127.0.0.1:${server.address().port}/eml-workbench.html`);
     }
   } finally {
     await browser.close();

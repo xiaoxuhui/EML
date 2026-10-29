@@ -724,6 +724,10 @@
         value.append("（初始值）");
       } else if (source?.derivations?.length) {
         source.derivations.forEach((derivation) => value.appendChild(renderDerivation(derivation, true)));
+      } else if (node?.provenance === "definition-constant") {
+        value.append(node.sourceValueId && !source
+          ? "（函数定义中的固定值；原来源已不存在）"
+          : "（函数定义中的固定值；未记录生成来源）");
       }
       return value;
     }
@@ -737,6 +741,12 @@
     heading.className = "expanded-eml-heading";
     heading.textContent = `EML(${argumentText(node.inputs?.[0])}, ${argumentText(node.inputs?.[1])}) = ${node.result || "?"}`;
     element.appendChild(heading);
+    if (node.error) {
+      const error = document.createElement("div");
+      error.className = "notice error";
+      error.textContent = node.error;
+      element.appendChild(error);
+    }
     const inputs = document.createElement("div");
     inputs.className = "expanded-eml-inputs";
     ["x", "y"].forEach((name, index) => {
@@ -922,7 +932,13 @@
     elements.directFormulaList.textContent = tree.label || `EML(${tree.inputs.map((input) => input.label || input.result).join(", ")}) = ${tree.result}`;
     elements.calculationTree.replaceChildren();
     treeController.ensureValue(`function:${applicationStructureId}`);
-    elements.calculationTree.appendChild(renderExpandedEml(tree, true));
+    const attachFixedSources = (entry) => {
+      if (entry.type === "eml") return { ...entry, inputs: entry.inputs.map(attachFixedSources) };
+      if (entry.provenance !== "definition-constant") return entry;
+      const id = entry.sourceValueId || (Expr.isInteger(entry.expression, 1) ? Store.initialValueId : null);
+      return id && state.values[id] ? { ...entry, source: Store.buildValueTree(state, id, { maxDepth: Infinity, maxNodes: Infinity }) } : entry;
+    };
+    elements.calculationTree.appendChild(renderExpandedEml(attachFixedSources(tree), true));
     treeController.apply();
     return true;
   }

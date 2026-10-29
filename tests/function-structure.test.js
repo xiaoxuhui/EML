@@ -71,6 +71,31 @@ test("未填实参和固定数学表达式完整保留，不求值", () => {
   assert.deepEqual(tree.inputs[0].node.expression, expression);
 });
 
+test("固定数值保留定义来源ID，未绑定变量不挂接数据来源", () => {
+  const node = { type: "eml", left: parameter("y"), right: {
+    type: "constant", expression: E.neg(E.E), displayText: "-e", sourceValueId: "saved-negative-e",
+  } };
+  const tree = Structure.toEmlTree(Structure.expand(node));
+  assert.equal(tree.inputs[1].sourceValueId, "saved-negative-e");
+  assert.equal(tree.inputs[1].provenance, "definition-constant");
+  assert.equal(tree.inputs[0].sourceValueId, undefined);
+});
+
+test("子树得到0后进入ln会停止，并保留0的计算来源", () => {
+  const constant = (expression) => ({ type: "constant", expression, displayText: E.render(expression) });
+  const zero = { type: "eml", left: constant(E.ONE), right: constant(E.pow(E.E, E.E)) };
+  const outer = { type: "eml", left: parameter("x"), right: zero };
+  const tree = Structure.toEmlTree(Structure.expand(outer));
+  assert.equal(tree.inputs[1].result, "0");
+  assert.equal(tree.result, "未定义");
+  assert.equal(tree.error, "ln(0) 未定义");
+  assert.equal(tree.expression, null);
+  const parent = Structure.toEmlTree(Structure.expand({ type: "eml", left: outer, right: constant(E.ONE) }));
+  assert.equal(parent.result, "未定义");
+  assert.match(parent.error, /输入未定义/);
+  assert.equal(parent.inputs[0].inputs[1].result, "0");
+});
+
 test("循环、缺失定义及参数数量错误明确报告", () => {
   const f = { name: "f", parameterNames: ["x"], body: call("g", parameter("x")) };
   const g = { name: "g", parameterNames: ["x"], body: call("f", parameter("x")) };
